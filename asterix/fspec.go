@@ -4,6 +4,7 @@ package asterix
 import (
 	"bytes"
 	"fmt"
+	"io"
 )
 
 // FSPEC represents the Field Specification of an ASTERIX record
@@ -19,7 +20,11 @@ func NewFSPEC() *FSPEC {
 }
 
 // SetFRN marks a Field Reference Number as present
-func (f *FSPEC) SetFRN(frn uint8) {
+func (f *FSPEC) SetFRN(frn uint8) error {
+	if frn == 0 {
+		return fmt.Errorf("%w: FRN cannot be 0", ErrInvalidField)
+	}
+
 	byteIndex := (frn - 1) / 7 // 7 bits per byte (last bit is FX)
 	bitPosition := (frn - 1) % 7
 
@@ -34,10 +39,15 @@ func (f *FSPEC) SetFRN(frn uint8) {
 
 	// Set the bit
 	f.bits[byteIndex] |= 0x80 >> bitPosition
+	return nil
 }
 
 // GetFRN checks if a Field Reference Number is present
 func (f *FSPEC) GetFRN(frn uint8) bool {
+	if frn == 0 {
+		return false
+	}
+
 	byteIndex := (frn - 1) / 7
 	bitPosition := (frn - 1) % 7
 
@@ -50,6 +60,10 @@ func (f *FSPEC) GetFRN(frn uint8) bool {
 
 // Encode writes the FSPEC to a buffer
 func (f *FSPEC) Encode(buf *bytes.Buffer) (int, error) {
+	if len(f.bits) == 0 {
+		return 0, fmt.Errorf("%w: no bits set", ErrInvalidFSPEC)
+	}
+
 	n, err := buf.Write(f.bits)
 	if err != nil {
 		return n, fmt.Errorf("writing FSPEC bits: %w", err)
@@ -59,10 +73,18 @@ func (f *FSPEC) Encode(buf *bytes.Buffer) (int, error) {
 
 // Decode reads the FSPEC from a buffer
 func (f *FSPEC) Decode(buf *bytes.Buffer) (int, error) {
+	if buf.Len() == 0 {
+		return 0, fmt.Errorf("reading FSPEC byte: %w", io.EOF)
+	}
+
 	f.bits = f.bits[:0] // Reset existing bits
 	bytesRead := 0
 
 	for {
+		if buf.Len() == 0 {
+			return bytesRead, fmt.Errorf("reading FSPEC byte: unexpected end of buffer")
+		}
+
 		b, err := buf.ReadByte()
 		if err != nil {
 			return bytesRead, fmt.Errorf("reading FSPEC byte: %w", err)
@@ -74,6 +96,11 @@ func (f *FSPEC) Decode(buf *bytes.Buffer) (int, error) {
 		// Check FX bit
 		if b&0x01 == 0 {
 			break // No more extensions
+		}
+
+		// Safety check for malformed data
+		if bytesRead >= 8 { // No valid ASTERIX message needs more than 8 FSPEC bytes
+			return bytesRead, fmt.Errorf("%w: too many extension bytes (got %d)", ErrInvalidFSPEC, bytesRead)
 		}
 	}
 

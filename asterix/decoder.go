@@ -3,60 +3,129 @@ package asterix
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
+	"io"
+	"time"
 )
 
 // Decoder handles decoding of ASTERIX data
 type Decoder struct {
-	// map of known UAPs by category
-	uaps map[Category]UAP
+	decoders map[Category]*CategoryDecoder
 }
 
-// NewDecoder creates a new ASTERIX decoder with registered UAPs
+// CategoryDecoder holds pre-compiled information for decoding a specific category
+type CategoryDecoder struct {
+	category   Category
+	fieldSpecs []FieldSpec
+	uap        UAP
+}
+
+// FieldSpec contains pre-compiled field information
+type FieldSpec struct {
+	FRN      uint8
+	DataItem string
+	Type     ItemType
+	Length   uint8
+}
+
+// NewDecoder creates a decoder with the provided UAPs
 func NewDecoder(uaps ...UAP) (*Decoder, error) {
 	d := &Decoder{
-		uaps: make(map[Category]UAP),
+		decoders: make(map[Category]*CategoryDecoder),
 	}
 
-	// Register provided UAPs
 	for _, uap := range uaps {
 		if uap == nil {
 			return nil, fmt.Errorf("%w: UAP cannot be nil", ErrInvalidMessage)
 		}
-		d.uaps[uap.Category()] = uap
+
+		cd, err := newCategoryDecoder(uap)
+		if err != nil {
+			return nil, fmt.Errorf("creating decoder for category %v: %w", uap.Category(), err)
+		}
+		d.decoders[uap.Category()] = cd
 	}
 
 	return d, nil
 }
 
-// Decode takes raw ASTERIX data and returns the decoded data items
-func (d *Decoder) Decode(data []byte) ([]map[string]DataItem, error) {
+// newCategoryDecoder creates a new category-specific decoder
+func newCategoryDecoder(uap UAP) (*CategoryDecoder, error) {
+	cd := &CategoryDecoder{
+		category: uap.Category(),
+		uap:      uap,
+	}
+
+	// Pre-compile field specifications
+	for _, field := range uap.Fields() {
+		spec := FieldSpec{
+			FRN:      field.FRN,
+			DataItem: field.DataItem,
+			Type:     field.Type,
+			Length:   field.Length,
+		}
+		cd.fieldSpecs = append(cd.fieldSpecs, spec)
+	}
+
+	return cd, nil
+}
+
+// Decode processes raw ASTERIX data
+func (d *Decoder) Decode(data []byte) (*AsterixMessage, error) {
 	if len(data) < 3 {
 		return nil, fmt.Errorf("%w: data too short", ErrInvalidMessage)
 	}
 
-	// Read category
 	cat := Category(data[0])
-
-	// Find appropriate UAP
-	uap, exists := d.uaps[cat]
+	cd, exists := d.decoders[cat]
 	if !exists {
 		return nil, fmt.Errorf("%w: %d", ErrUnknownCategory, cat)
 	}
 
-	// Read length
-	length := uint16(data[1])<<8 | uint16(data[2])
+	// Check length
+	length := binary.BigEndian.Uint16(data[1:3])
 	if int(length) != len(data) {
-		return nil, fmt.Errorf("%w: expected %d, got %d", ErrInvalidLength, length, len(data))
+		return nil, fmt.Errorf("%w: expected %d, got %d",
+			ErrInvalidLength, length, len(data))
 	}
 
-	buf := bytes.NewBuffer(data[3:]) // Skip CAT and length
+	// Create the message structure
+	msg := &AsterixMessage{
+		Category:   cat,
+		RawMessage: data,
+		Timestamp:  time.Now(),
+		uap:        cd.uap,
+	}
+
+	// Decode records
+	records, err := cd.decode(bytes.NewBuffer(data[3:])) // Skip CAT/LEN
+	if err != nil {
+		return nil, fmt.Errorf("decoding records: %w", err)
+	}
+
+	// Store records
+	msg.records = records
+
+	return msg, nil
+}
+
+// decode processes data for a specific category
+func (cd *CategoryDecoder) decode(buf *bytes.Buffer) ([]map[string]DataItem, error) {
 	var results []map[string]DataItem
 
-	// Decode records until buffer is exhausted
 	for buf.Len() > 0 {
-		items, err := d.decodeRecord(buf, uap)
+		// Check for at least one byte for FSPEC
+		if buf.Len() < 1 {
+			break // End of data reached
+		}
+
+		items, err := cd.decodeRecord(buf)
 		if err != nil {
+			// Handle EOF while processing the last record
+			if err == io.EOF && buf.Len() == 0 {
+				break
+			}
 			return nil, err
 		}
 		results = append(results, items)
@@ -65,85 +134,51 @@ func (d *Decoder) Decode(data []byte) ([]map[string]DataItem, error) {
 	return results, nil
 }
 
-func (d *Decoder) decodeRecord(buf *bytes.Buffer, uap UAP) (map[string]DataItem, error) {
+// decodeRecord processes a single ASTERIX record
+func (cd *CategoryDecoder) decodeRecord(buf *bytes.Buffer) (map[string]DataItem, error) {
+	if buf.Len() == 0 {
+		return nil, io.EOF
+	}
+
+	// Read FSPEC
 	fspec := NewFSPEC()
-	n, err := fspec.Decode(buf)
-	_ = n
-	if err != nil {
+	if _, err := fspec.Decode(buf); err != nil {
 		return nil, fmt.Errorf("decoding FSPEC: %w", err)
 	}
 
+	// Decode fields using pre-compiled specs
 	items := make(map[string]DataItem)
-
-	// Decode items based on FSPEC
-	for _, field := range uap.Fields() {
-		if !fspec.GetFRN(field.FRN) {
+	for _, spec := range cd.fieldSpecs {
+		if !fspec.GetFRN(spec.FRN) {
 			continue
 		}
 
-		item, err := uap.CreateDataItem(field.DataItem)
+		// For fixed length items, check if we have enough bytes
+		if spec.Type == Fixed && buf.Len() < int(spec.Length) {
+			return nil, fmt.Errorf("buffer too short for %s: need %d bytes, have %d",
+				spec.DataItem, spec.Length, buf.Len())
+		}
+
+		item, err := cd.uap.CreateDataItem(spec.DataItem)
 		if err != nil {
-			// Skip unknown data item based on its type
-			if err := d.skipField(buf, field); err != nil {
-				return nil, fmt.Errorf("skipping field %s: %w", field.DataItem, err)
+			if spec.Type == Fixed {
+				// For fixed length items, we can skip even unknown ones
+				if buf.Len() < int(spec.Length) {
+					return nil, fmt.Errorf("buffer too short to skip %s: need %d bytes, have %d",
+						spec.DataItem, spec.Length, buf.Len())
+				}
+				buf.Next(int(spec.Length))
+				continue
 			}
-			continue
+			return nil, fmt.Errorf("creating item %s: %w", spec.DataItem, err)
 		}
 
-		_, err = item.Decode(buf)
-		if err != nil {
-			return nil, fmt.Errorf("decoding %s: %w", field.DataItem, err)
+		if _, err := item.Decode(buf); err != nil {
+			return nil, fmt.Errorf("decoding %s: %w", spec.DataItem, err)
 		}
 
-		items[field.DataItem] = item
+		items[spec.DataItem] = item
 	}
 
 	return items, nil
-}
-
-func (d *Decoder) skipField(buf *bytes.Buffer, field DataField) error {
-	switch field.Type {
-	case Fixed:
-		if buf.Len() < int(field.Length) {
-			return fmt.Errorf("buffer too short for fixed field")
-		}
-		buf.Next(int(field.Length))
-		return nil
-
-	case Extended:
-		for {
-			b, err := buf.ReadByte()
-			if err != nil {
-				return fmt.Errorf("reading extended field byte: %w", err)
-			}
-			if b&0x01 == 0 {
-				return nil
-			}
-		}
-
-	case Repetitive:
-		rep, err := buf.ReadByte()
-		if err != nil {
-			return fmt.Errorf("reading repetition factor: %w", err)
-		}
-		length := int(rep) * int(field.Length)
-		if buf.Len() < length {
-			return fmt.Errorf("buffer too short for repetitive field")
-		}
-		buf.Next(length)
-		return nil
-
-	case Compound:
-		// Read primary field
-		b, err := buf.ReadByte()
-		_ = b
-		if err != nil {
-			return fmt.Errorf("reading compound primary field: %w", err)
-		}
-		// For now we'll just indicate we can't handle compound fields
-		return fmt.Errorf("compound field skipping not implemented")
-
-	default:
-		return fmt.Errorf("unknown field type: %v", field.Type)
-	}
 }
