@@ -128,10 +128,6 @@ func runDump(cmd *cobra.Command, args []string) error {
 
 	defer conn.Close()
 
-	// Create reader
-	reader := asterix.NewReader(conn, decoder)
-	defer reader.Close()
-
 	verbose, _ := cmd.Flags().GetBool("verbose")
 	if verbose {
 		fmt.Fprintf(os.Stderr, "Listening for ASTERIX messages on %s port %s...\n",
@@ -141,7 +137,7 @@ func runDump(cmd *cobra.Command, args []string) error {
 	// Start processing in a goroutine
 	done := make(chan error, 1)
 	go func() {
-		done <- processMessages(reader, out)
+		done <- processMessages(decoder, conn, out)
 	}()
 
 	// Wait for either completion or interrupt
@@ -156,13 +152,16 @@ func runDump(cmd *cobra.Command, args []string) error {
 	}
 }
 
-func processMessages(reader *asterix.Reader, out *os.File) error {
+// Updated function to use the decoder directly with an io.Reader
+func processMessages(decoder *asterix.Decoder, r io.Reader, out *os.File) error {
 	for {
-		msg, err := reader.ReadMessage()
+		// Use the decoder to read a message directly from the io.Reader
+		msg, err := decoder.Decode(r)
 		if err != nil {
 			if err == io.EOF {
 				return nil // Connection closed normally
 			}
+
 			// Log the error but continue processing
 			fmt.Fprintf(os.Stderr, "Error reading message: %v\n", err)
 			continue
@@ -170,11 +169,6 @@ func processMessages(reader *asterix.Reader, out *os.File) error {
 
 		// Print the message
 		fmt.Fprintln(out, msg)
-
-		// If we want more detailed record output, we could do:
-		// for i := 0; i < msg.GetRecordCount(); i++ {
-		//     // Print each record - this assumes we've added a way to get records
-		// }
 	}
 }
 
