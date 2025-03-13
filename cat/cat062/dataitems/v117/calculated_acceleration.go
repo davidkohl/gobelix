@@ -59,10 +59,10 @@ func (c *CalculatedAcceleration) Encode(buf *bytes.Buffer) (int, error) {
 func (c *CalculatedAcceleration) Validate() error {
 	// int8 range with LSB of 0.25 gives range of -32 to 31.75 m/s²
 	if c.Ax < -32 || c.Ax > 31.75 {
-		return fmt.Errorf("Ax component out of range [-32,31.75]: %f", c.Ax)
+		return fmt.Errorf("the Ax component out of range [-32,31.75]: %f", c.Ax)
 	}
 	if c.Ay < -32 || c.Ay > 31.75 {
-		return fmt.Errorf("Ay component out of range [-32,31.75]: %f", c.Ay)
+		return fmt.Errorf("the Ay component out of range [-32,31.75]: %f", c.Ay)
 	}
 	return nil
 }

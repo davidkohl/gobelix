@@ -8,78 +8,121 @@ import (
 )
 
 // CalculatedTrackVelocity implements I062/185
-// Calculated track velocity expressed in Cartesian co-ordinates
+// Calculated track velocity expressed in Cartesian coordinates (Vx, Vy)
 type CalculatedTrackVelocity struct {
-	Vx float64 // X component of velocity in m/s
-	Vy float64 // Y component of velocity in m/s
+	// Vx - Velocity component in x direction (east/west), in meters per second
+	// Positive values indicate eastward movement
+	Vx float64
+
+	// Vy - Velocity component in y direction (north/south), in meters per second
+	// Positive values indicate northward movement
+	Vy float64
 }
 
-func (c *CalculatedTrackVelocity) Decode(buf *bytes.Buffer) (int, error) {
+// Decode parses an ASTERIX Category 062 I185 data item from the buffer
+func (v *CalculatedTrackVelocity) Decode(buf *bytes.Buffer) (int, error) {
+	if buf.Len() < 4 {
+		return 0, fmt.Errorf("buffer too short for calculated track velocity (need 4 bytes)")
+	}
+
 	data := make([]byte, 4)
 	n, err := buf.Read(data)
-	if err != nil {
+	if err != nil || n != 4 {
 		return n, fmt.Errorf("reading calculated track velocity: %w", err)
 	}
-	if n != 4 {
-		return n, fmt.Errorf("insufficient data for calculated track velocity: got %d bytes, want 4", n)
+
+	// Extract Vx (16 bits) as a signed value
+	vxBits := uint16(data[0])<<8 | uint16(data[1])
+
+	// Convert to signed int16 (two's complement)
+	var vxValue int16
+	if (vxBits & 0x8000) != 0 {
+		// Negative value (two's complement)
+		vxValue = -int16(^vxBits + 1)
+	} else {
+		// Positive value
+		vxValue = int16(vxBits)
 	}
 
-	// Vx component: bytes 0-1, two's complement, LSB = 0.25 m/s
-	vxRaw := int16(data[0])<<8 | int16(data[1])
-	c.Vx = float64(vxRaw) * 0.25
+	// Calculate Vx in meters per second
+	// LSB = 0.25 m/s
+	v.Vx = float64(vxValue) * 0.25
 
-	// Vy component: bytes 2-3, two's complement, LSB = 0.25 m/s
-	vyRaw := int16(data[2])<<8 | int16(data[3])
-	c.Vy = float64(vyRaw) * 0.25
+	// Extract Vy (16 bits) as a signed value
+	vyBits := uint16(data[2])<<8 | uint16(data[3])
+
+	// Convert to signed int16 (two's complement)
+	var vyValue int16
+	if (vyBits & 0x8000) != 0 {
+		// Negative value (two's complement)
+		vyValue = -int16(^vyBits + 1)
+	} else {
+		// Positive value
+		vyValue = int16(vyBits)
+	}
+
+	// Calculate Vy in meters per second
+	// LSB = 0.25 m/s
+	v.Vy = float64(vyValue) * 0.25
 
 	return n, nil
 }
 
-func (c *CalculatedTrackVelocity) Encode(buf *bytes.Buffer) (int, error) {
-	if err := c.Validate(); err != nil {
-		return 0, err
+// Encode serializes the calculated track velocity into the buffer
+func (v *CalculatedTrackVelocity) Encode(buf *bytes.Buffer) (int, error) {
+	data := make([]byte, 4)
+
+	// Convert Vx from m/s to binary representation
+	// LSB = 0.25 m/s
+	vxValue := int16(math.Round(v.Vx / 0.25))
+
+	// Handle two's complement for negative values
+	var vxBits uint16
+	if vxValue < 0 {
+		vxBits = uint16(^(-vxValue) + 1) // Two's complement for negative values
+	} else {
+		vxBits = uint16(vxValue)
 	}
 
-	// Convert to raw values
-	vxRaw := int16(math.Round(c.Vx / 0.25))
-	vyRaw := int16(math.Round(c.Vy / 0.25))
+	// Store Vx in first 2 bytes
+	data[0] = byte(vxBits >> 8)
+	data[1] = byte(vxBits)
 
-	data := []byte{
-		byte(vxRaw >> 8),
-		byte(vxRaw),
-		byte(vyRaw >> 8),
-		byte(vyRaw),
+	// Convert Vy from m/s to binary representation
+	// LSB = 0.25 m/s
+	vyValue := int16(math.Round(v.Vy / 0.25))
+
+	// Handle two's complement for negative values
+	var vyBits uint16
+	if vyValue < 0 {
+		vyBits = uint16(^(-vyValue) + 1) // Two's complement for negative values
+	} else {
+		vyBits = uint16(vyValue)
 	}
 
-	n, err := buf.Write(data)
-	if err != nil {
-		return n, fmt.Errorf("writing calculated track velocity: %w", err)
-	}
-	return n, nil
+	// Store Vy in last 2 bytes
+	data[2] = byte(vyBits >> 8)
+	data[3] = byte(vyBits)
+
+	return buf.Write(data)
 }
 
-func (c *CalculatedTrackVelocity) Validate() error {
-	// According to the spec, valid range is -8192 m/s to 8191.75 m/s
-	if c.Vx < -8192 || c.Vx > 8191.75 {
-		return fmt.Errorf("Vx component out of range [-8192,8191.75]: %f", c.Vx)
+// String returns a human-readable representation of the calculated track velocity
+func (v *CalculatedTrackVelocity) String() string {
+	return fmt.Sprintf("Vx: %.2f m/s, Vy: %.2f m/s", v.Vx, v.Vy)
+}
+
+// Validate performs validation on the calculated track velocity
+func (v *CalculatedTrackVelocity) Validate() error {
+	// Check Vx is within valid range [-8192, 8191.75] m/s
+	if v.Vx < -8192 || v.Vx > 8191.75 {
+		return fmt.Errorf("Vx out of range [-8192,8191.75]: %f", v.Vx)
 	}
-	if c.Vy < -8192 || c.Vy > 8191.75 {
-		return fmt.Errorf("Vy component out of range [-8192,8191.75]: %f", c.Vy)
+
+	// Check Vy is within valid range [-8192, 8191.75] m/s
+	if v.Vy < -8192 || v.Vy > 8191.75 {
+		return fmt.Errorf("Vy out of range [-8192,8191.75]: %f", v.Vy)
 	}
+
 	return nil
-}
-
-func (c *CalculatedTrackVelocity) String() string {
-	// Calculate ground speed and track angle
-	groundSpeed := math.Sqrt(c.Vx*c.Vx + c.Vy*c.Vy)
-	trackAngle := math.Atan2(c.Vx, c.Vy) * 180 / math.Pi
-	if trackAngle < 0 {
-		trackAngle += 360
-	}
-
-	// Convert to knots for display (1 m/s = 1.94384 knots)
-	groundSpeedKt := groundSpeed * 1.94384
-
-	return fmt.Sprintf("Velocity: %.1f kt / %.1f° (Vx: %.2f m/s, Vy: %.2f m/s)",
-		groundSpeedKt, trackAngle, c.Vx, c.Vy)
 }
