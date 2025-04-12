@@ -9,6 +9,7 @@ type Category uint8
 // Define known categories
 const (
 	Cat021 Category = 21
+	Cat048 Category = 48
 	Cat062 Category = 62
 	Cat063 Category = 63
 )
