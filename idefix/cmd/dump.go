@@ -12,7 +12,9 @@ import (
 
 	"github.com/davidkohl/gobelix/asterix"
 	"github.com/davidkohl/gobelix/cat/cat021"
+	"github.com/davidkohl/gobelix/cat/cat048"
 	"github.com/davidkohl/gobelix/cat/cat062"
+	"github.com/davidkohl/gobelix/cat/cat063"
 	"github.com/davidkohl/gobelix/idefix/internal/asxreader"
 	"github.com/spf13/cobra"
 )
@@ -22,6 +24,7 @@ var (
 	outputFile string
 	dumpAll    bool
 	dumpCat021 bool
+	dumpCat048 bool
 	dumpCat062 bool
 	dumpCat063 bool
 )
@@ -45,6 +48,7 @@ Example: idefix dump -p 2000/udp --dump021`,
 	// Add category flags
 	dumpCmd.Flags().BoolVar(&dumpAll, "dumpAll", false, "Dump all ASTERIX categories")
 	dumpCmd.Flags().BoolVar(&dumpCat021, "dump021", false, "Dump ASTERIX category 021")
+	dumpCmd.Flags().BoolVar(&dumpCat048, "dump048", false, "Dump ASTERIX category 048")
 	dumpCmd.Flags().BoolVar(&dumpCat062, "dump062", false, "Dump ASTERIX category 062")
 	dumpCmd.Flags().BoolVar(&dumpCat063, "dump063", false, "Dump ASTERIX category 063")
 
@@ -165,12 +169,28 @@ func createDecoder() (*asterix.Decoder, error) {
 		uaps = append(uaps, uap021)
 	}
 
+	if dumpAll || dumpCat048 {
+		uap048, err := cat048.NewUAP("1.6")
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize Cat062 UAP: %w", err)
+		}
+		uaps = append(uaps, uap048)
+	}
+
 	if dumpAll || dumpCat062 {
 		uap062, err := cat062.NewUAP("1.17")
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize Cat062 UAP: %w", err)
 		}
 		uaps = append(uaps, uap062)
+	}
+
+	if dumpAll || dumpCat063 {
+		uap063, err := cat063.NewUAP("1.6")
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize Cat062 UAP: %w", err)
+		}
+		uaps = append(uaps, uap063)
 	}
 
 	if len(uaps) == 0 {
