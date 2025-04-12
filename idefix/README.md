@@ -5,7 +5,7 @@ Idefix is a command-line utility for capturing, decoding, and analyzing ASTERIX 
 ## Features
 
 - Listen on UDP or TCP ports for ASTERIX data
-- Filter messages by ASTERIX category (021, 062)
+- Filter messages by ASTERIX category (021, 048, 062, 063)
 - Print decoded messages in a readable format
 - Output to stdout or file
 
@@ -62,7 +62,9 @@ idefix dump -p 2000/udp --dumpAll -v
   -o, --output string   Output file (default: stdout)
       --dumpAll         Dump all ASTERIX categories
       --dump021         Dump ASTERIX category 021
+      --dump048         Dump ASTERIX category 048
       --dump062         Dump ASTERIX category 062
+      --dump063         Dump ASTERIX category 063
   -v, --verbose         Enable verbose output
 ```
 
