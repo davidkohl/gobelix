@@ -72,25 +72,36 @@ func newCategoryDecoder(uap UAP) (*CategoryDecoder, error) {
 }
 
 // Decode processes raw ASTERIX data
-func (d *Decoder) Decode(data []byte) (*AsterixMessage, error) {
-	if len(data) < 3 {
-		return nil, fmt.Errorf("%w: data too short", ErrInvalidMessage)
+// Decode reads ASTERIX data from an io.Reader and returns a corresponding AsterixMessage
+func (d *Decoder) Decode(reader io.Reader) (*AsterixMessage, error) {
+	// Read the first 3 bytes to determine category and length
+	header := make([]byte, 3)
+	if _, err := io.ReadFull(reader, header); err != nil {
+		return nil, fmt.Errorf("reading message header: %w", err)
 	}
 
-	cat := Category(data[0])
+	// Extract category and length
+	cat := Category(header[0])
+	length := binary.BigEndian.Uint16(header[1:3])
+
+	if length < 3 {
+		return nil, fmt.Errorf("%w: invalid length %d", ErrInvalidLength, length)
+	}
+
+	// Find matching decoder
 	cd, exists := d.decoders[cat]
 	if !exists {
 		return nil, fmt.Errorf("%w: %d", ErrUnknownCategory, cat)
 	}
 
-	// Check length
-	length := binary.BigEndian.Uint16(data[1:3])
-	if int(length) != len(data) {
-		return nil, fmt.Errorf("%w: expected %d, got %d",
-			ErrInvalidLength, length, len(data))
+	// Read the rest of the message
+	data := make([]byte, length)
+	copy(data[:3], header)
+	if _, err := io.ReadFull(reader, data[3:]); err != nil {
+		return nil, fmt.Errorf("reading message body: %w", err)
 	}
 
-	// Create the message structure
+	// Create message structure
 	msg := &AsterixMessage{
 		Category:   cat,
 		RawMessage: data,
@@ -99,14 +110,12 @@ func (d *Decoder) Decode(data []byte) (*AsterixMessage, error) {
 	}
 
 	// Decode records
-	records, err := cd.decode(bytes.NewBuffer(data[3:])) // Skip CAT/LEN
+	records, err := cd.decode(bytes.NewBuffer(data[3:]))
 	if err != nil {
 		return nil, fmt.Errorf("decoding records: %w", err)
 	}
 
-	// Store records
 	msg.records = records
-
 	return msg, nil
 }
 
