@@ -36,6 +36,8 @@ func (u *UAP26) CreateDataItem(id string) (asterix.DataItem, error) {
 		return &common.DataSourceIdentifier{}, nil
 	case "I021/015":
 		return &common.ServiceIdentification{}, nil
+	case "I021/020":
+		return &v26.EmitterCategory{}, nil
 	case "I021/040":
 		return &v26.TargetReportDescriptor{}, nil
 	case "I021/080":

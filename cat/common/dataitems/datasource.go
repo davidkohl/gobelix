@@ -55,5 +55,5 @@ func (d *DataSourceIdentifier) Validate() error {
 }
 
 func (d *DataSourceIdentifier) String() string {
-	return fmt.Sprintf("SAC: %03d, SIC: %03d", d.SAC, d.SIC)
+	return fmt.Sprintf("SAC: %d, SIC: %d", d.SAC, d.SIC)
 }

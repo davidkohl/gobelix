@@ -78,8 +78,8 @@ func (m *AsterixMessage) String() string {
 			// Print data items in FRN order
 			for _, field := range fields {
 				if item, exists := record[field.DataItem]; exists {
-					sb.WriteString(fmt.Sprintf("  %s (%s): %v\n",
-						field.DataItem, field.Description, item))
+					sb.WriteString(fmt.Sprintf("%2d  %s (%s): %v\n",
+						field.FRN, field.DataItem, field.Description, item))
 				}
 			}
 		} else {
