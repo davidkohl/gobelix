@@ -48,6 +48,8 @@ func (u *UAP26) CreateDataItem(id string) (asterix.DataItem, error) {
 		return &common.Position{}, nil
 	case "I021/145":
 		return &common.FlightLevel{}, nil
+	case "I021/152":
+		return &v26.MagneticHeading{}, nil
 	case "I021/170":
 		return &v26.TargetIdentification{}, nil
 	case "I021/071":

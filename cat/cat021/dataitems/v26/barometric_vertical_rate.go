@@ -4,6 +4,7 @@ package v26
 import (
 	"bytes"
 	"fmt"
+	"math"
 )
 
 // BarometricVerticalRate implements I021/155
@@ -40,35 +41,37 @@ func (b *BarometricVerticalRate) Decode(buf *bytes.Buffer) (int, error) {
 	// Convert to feet/minute
 	b.Rate = raw * 6        // Using 6 instead of 6.25 to avoid floating point truncation
 	b.Rate += (raw * 1) / 4 // Add the 0.25 component carefully
-
 	return n, nil
 }
 
 func (b *BarometricVerticalRate) Encode(buf *bytes.Buffer) (int, error) {
-	// Convert back to raw value (divide by 6.25)
-	rawRate := b.Rate / 6
-	if b.Rate%6 >= 3 { // Round to nearest
-		rawRate++
-	}
+	rawRateFloat := float64(b.Rate) / 6.25
+	rawRate := int16(math.Round(rawRateFloat))
 
+	// Check if the value is within range (-16384 to +16383)
 	if !b.RE && (rawRate < -16384 || rawRate > 16383) {
 		return 0, fmt.Errorf("rate out of range without RE flag: %d", b.Rate)
 	}
 
+	// Create 2-byte buffer for the data
 	data := make([]byte, 2)
+
+	rawVal := uint16(rawRate & 0x7FFF)
+
 	if b.RE {
-		data[0] |= 0x80
-	}
-
-	var rawVal uint16
-	if rawRate < 0 {
-		rawVal = uint16(0x4000 | (uint16(-rawRate) & 0x3FFF))
+		data[0] = 0x80
 	} else {
-		rawVal = uint16(rawRate & 0x3FFF)
+		data[0] = 0x00
 	}
 
-	data[0] |= byte(rawVal >> 8)
-	data[1] = byte(rawVal)
+	if rawRate < 0 {
+
+		data[0] |= 0x40 | byte((rawVal>>8)&0x3F)
+	} else {
+		data[0] |= byte((rawVal >> 8) & 0x3F)
+	}
+
+	data[1] = byte(rawVal & 0xFF)
 
 	n, err := buf.Write(data)
 	if err != nil {
