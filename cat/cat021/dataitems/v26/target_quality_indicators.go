@@ -36,6 +36,22 @@ func (q *QualityIndicators) Encode(buf *bytes.Buffer) (int, error) {
 
 	bytesWritten := 0
 
+	// Determine which extensions need to be included
+	// Check if first extension needs to be included
+	if q.NICbaro || q.SIL > 0 || q.NACp > 0 {
+		q.hasExtensions = 1
+
+		// Check if second extension needs to be included
+		if q.SILS || q.SDA > 0 || q.GVA > 0 {
+			q.hasExtensions = 2
+
+			// Check if third extension needs to be included
+			if q.PIC > 0 {
+				q.hasExtensions = 3
+			}
+		}
+	}
+
 	// Primary Subfield
 	b := (q.NUCr_NACv << 5) | (q.NUCp_NIC << 1)
 	if q.hasExtensions > 0 {
