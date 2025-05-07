@@ -172,7 +172,7 @@ func createDecoder() (*asterix.Decoder, error) {
 	if dumpAll || dumpCat048 {
 		uap048, err := cat048.NewUAP("1.32")
 		if err != nil {
-			return nil, fmt.Errorf("failed to initialize Cat062 UAP: %w", err)
+			return nil, fmt.Errorf("failed to initialize Cat048 UAP: %w", err)
 		}
 		uaps = append(uaps, uap048)
 	}

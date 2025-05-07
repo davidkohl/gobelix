@@ -70,6 +70,8 @@ func (u *UAP26) CreateDataItem(id string) (asterix.DataItem, error) {
 		return &v26.TargetStatus{}, nil
 	case "I021/210":
 		return &v26.MOPSVersion{}, nil
+	case "I021/295":
+		return &v26.DataAges{}, nil
 	case "I021/155":
 		return &v26.BarometricVerticalRate{}, nil
 	case "I021/150":

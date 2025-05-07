@@ -20,7 +20,7 @@ func (c Category) String() string {
 
 func (c Category) IsValid() bool {
 	switch c {
-	case Cat021, Cat062, Cat063:
+	case Cat021, Cat048, Cat062, Cat063:
 		return true
 	default:
 		return false

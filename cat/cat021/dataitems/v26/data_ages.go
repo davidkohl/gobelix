@@ -538,7 +538,69 @@ func (d *DataAges) Decode(buf *bytes.Buffer) (int, error) {
 	// Check for extension
 	hasFirstExtension := (octet1 & 0x01) != 0
 
-	// Read ages for primary subfield
+	var octet2, octet3, octet4 byte
+	hasSecondExtension := false
+	hasThirdExtension := false
+
+	// Read first extension if present
+	if hasFirstExtension {
+		octet2, err = buf.ReadByte()
+		if err != nil {
+			return bytesRead, fmt.Errorf("reading first extension: %w", err)
+		}
+		bytesRead++
+
+		// Extract flags from first extension
+		d.FL = (octet2 & 0x80) != 0
+		d.ISA = (octet2 & 0x40) != 0
+		d.FSA = (octet2 & 0x20) != 0
+		d.AS = (octet2 & 0x10) != 0
+		d.TAS = (octet2 & 0x08) != 0
+		d.MH = (octet2 & 0x04) != 0
+		d.BVR = (octet2 & 0x02) != 0
+
+		// Check for extension
+		hasSecondExtension = (octet2 & 0x01) != 0
+	}
+
+	// Read second extension if present
+	if hasSecondExtension {
+		octet3, err = buf.ReadByte()
+		if err != nil {
+			return bytesRead, fmt.Errorf("reading second extension: %w", err)
+		}
+		bytesRead++
+
+		// Extract flags from second extension
+		d.GVR = (octet3 & 0x80) != 0
+		d.GV = (octet3 & 0x40) != 0
+		d.TAR = (octet3 & 0x20) != 0
+		d.TID = (octet3 & 0x10) != 0
+		d.TS = (octet3 & 0x08) != 0
+		d.MET = (octet3 & 0x04) != 0
+		d.ROA = (octet3 & 0x02) != 0
+
+		// Check for extension
+		hasThirdExtension = (octet3 & 0x01) != 0
+	}
+
+	// Read third extension if present
+	if hasThirdExtension {
+		octet4, err = buf.ReadByte()
+		if err != nil {
+			return bytesRead, fmt.Errorf("reading third extension: %w", err)
+		}
+		bytesRead++
+
+		// Extract flags from third extension
+		d.ARA = (octet4 & 0x80) != 0
+		d.SCC = (octet4 & 0x40) != 0
+		// Bits 6-2 are spare, Bit 1 is FX
+	}
+
+	// Now that we've read all the presence bits, read the actual age values
+
+	// Read ages for primary subfield items
 	if d.AOS {
 		d.AOSAge, err = buf.ReadByte()
 		if err != nil {
@@ -589,31 +651,7 @@ func (d *DataAges) Decode(buf *bytes.Buffer) (int, error) {
 		bytesRead++
 	}
 
-	// If no extension, return
-	if !hasFirstExtension {
-		return bytesRead, nil
-	}
-
-	// Read first extension
-	octet2, err := buf.ReadByte()
-	if err != nil {
-		return bytesRead, fmt.Errorf("reading first extension: %w", err)
-	}
-	bytesRead++
-
-	// Extract flags from first extension
-	d.FL = (octet2 & 0x80) != 0
-	d.ISA = (octet2 & 0x40) != 0
-	d.FSA = (octet2 & 0x20) != 0
-	d.AS = (octet2 & 0x10) != 0
-	d.TAS = (octet2 & 0x08) != 0
-	d.MH = (octet2 & 0x04) != 0
-	d.BVR = (octet2 & 0x02) != 0
-
-	// Check for extension
-	hasSecondExtension := (octet2 & 0x01) != 0
-
-	// Read ages for first extension
+	// Read ages for first extension items
 	if d.FL {
 		d.FLAge, err = buf.ReadByte()
 		if err != nil {
@@ -664,31 +702,7 @@ func (d *DataAges) Decode(buf *bytes.Buffer) (int, error) {
 		bytesRead++
 	}
 
-	// If no second extension, return
-	if !hasSecondExtension {
-		return bytesRead, nil
-	}
-
-	// Read second extension
-	octet3, err := buf.ReadByte()
-	if err != nil {
-		return bytesRead, fmt.Errorf("reading second extension: %w", err)
-	}
-	bytesRead++
-
-	// Extract flags from second extension
-	d.GVR = (octet3 & 0x80) != 0
-	d.GV = (octet3 & 0x40) != 0
-	d.TAR = (octet3 & 0x20) != 0
-	d.TID = (octet3 & 0x10) != 0
-	d.TS = (octet3 & 0x08) != 0
-	d.MET = (octet3 & 0x04) != 0
-	d.ROA = (octet3 & 0x02) != 0
-
-	// Check for extension
-	hasThirdExtension := (octet3 & 0x01) != 0
-
-	// Read ages for second extension
+	// Read ages for second extension items
 	if d.GVR {
 		d.GVRAge, err = buf.ReadByte()
 		if err != nil {
@@ -739,24 +753,7 @@ func (d *DataAges) Decode(buf *bytes.Buffer) (int, error) {
 		bytesRead++
 	}
 
-	// If no third extension, return
-	if !hasThirdExtension {
-		return bytesRead, nil
-	}
-
-	// Read third extension
-	octet4, err := buf.ReadByte()
-	if err != nil {
-		return bytesRead, fmt.Errorf("reading third extension: %w", err)
-	}
-	bytesRead++
-
-	// Extract flags from third extension
-	d.ARA = (octet4 & 0x80) != 0
-	d.SCC = (octet4 & 0x40) != 0
-	// Bits 6-2 are spare, Bit 1 is FX
-
-	// Read ages for third extension
+	// Read ages for third extension items
 	if d.ARA {
 		d.ARAAge, err = buf.ReadByte()
 		if err != nil {
