@@ -25,6 +25,7 @@ const (
 	PSNoCommunications
 	PSUnlawfulInterference
 	PSDownedAircraft
+	PSReserved // Reserved value
 )
 
 // Surveillance Status values
@@ -80,7 +81,7 @@ func (t *TargetStatus) Encode(buf *bytes.Buffer) (int, error) {
 }
 
 func (t *TargetStatus) Validate() error {
-	if t.PS > PSDownedAircraft {
+	if t.PS > PSReserved {
 		return fmt.Errorf("invalid priority status: %d", t.PS)
 	}
 	if t.SS > SSSPI {
@@ -117,6 +118,8 @@ func (t *TargetStatus) String() string {
 		priority = "Unlawful"
 	case PSDownedAircraft:
 		priority = "Downed"
+	case PSReserved:
+		priority = "Reserved"
 	}
 	parts = append(parts, priority)
 

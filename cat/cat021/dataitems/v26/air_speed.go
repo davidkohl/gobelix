@@ -30,7 +30,8 @@ func (a *AirSpeed) Decode(buf *bytes.Buffer) (int, error) {
 	if a.IsMach {
 		a.Speed = float64(raw) * 0.001 // LSB = 0.001 Mach
 	} else {
-		a.Speed = float64(raw) * math.Pow(2, -14) // LSB = 2^-14 NM/s
+		// Convert to knots directly
+		a.Speed = float64(raw) * math.Pow(2, -14) * 3600 // LSB = 2^-14 NM/s * 3600 = knots
 	}
 
 	return n, a.Validate()
@@ -45,7 +46,8 @@ func (a *AirSpeed) Encode(buf *bytes.Buffer) (int, error) {
 	if a.IsMach {
 		raw = uint16(math.Round(a.Speed * 1000)) // Convert Mach to raw value
 	} else {
-		raw = uint16(math.Round(a.Speed * math.Pow(2, 14))) // Convert NM/s to raw value
+		// Convert from knots to raw value
+		raw = uint16(math.Round((a.Speed / 3600) * math.Pow(2, 14))) // Convert knots to raw value
 	}
 
 	data := make([]byte, 2)
@@ -68,8 +70,8 @@ func (a *AirSpeed) Validate() error {
 			return fmt.Errorf("mach number out of valid range [0,4.096]: %f", a.Speed)
 		}
 	} else {
-		if a.Speed < 0 || a.Speed >= 2 {
-			return fmt.Errorf("IAS out of valid range [0,2) NM/s: %f", a.Speed)
+		if a.Speed < 0 || a.Speed >= 7200 {
+			return fmt.Errorf("IAS out of valid range [0,7200) knots: %f", a.Speed)
 		}
 	}
 	return nil
