@@ -1,4 +1,5 @@
-// cat/cat021/dataitems/v26/data_ages.go
+// Final fixed DataAges implementation for gobelix
+// Filepath: cat/cat021/dataitems/v26/data_ages.go
 
 package v26
 
@@ -70,39 +71,26 @@ type DataAges struct {
 	SCCAge uint8 // Surface Capabilities and Characteristics age
 }
 
-// HasAnyAge checks if there's at least one age value set
-func (d *DataAges) HasAnyAge() bool {
-	return d.AOS || d.TRD || d.M3A || d.QI || d.TI || d.MAM || d.GH ||
+func (d *DataAges) Encode(buf *bytes.Buffer) (int, error) {
+	// Check if there's at least one age value set
+	hasAnyAge := d.AOS || d.TRD || d.M3A || d.QI || d.TI || d.MAM || d.GH ||
 		d.FL || d.ISA || d.FSA || d.AS || d.TAS || d.MH || d.BVR ||
 		d.GVR || d.GV || d.TAR || d.TID || d.TS || d.MET || d.ROA ||
 		d.ARA || d.SCC
-}
 
-// HasFirstExtension checks if any field in the first extension is set
-func (d *DataAges) HasFirstExtension() bool {
-	return d.FL || d.ISA || d.FSA || d.AS || d.TAS || d.MH || d.BVR
-}
-
-// HasSecondExtension checks if any field in the second extension is set
-func (d *DataAges) HasSecondExtension() bool {
-	return d.GVR || d.GV || d.TAR || d.TID || d.TS || d.MET || d.ROA
-}
-
-// HasThirdExtension checks if any field in the third extension is set
-func (d *DataAges) HasThirdExtension() bool {
-	return d.ARA || d.SCC
-}
-
-func (d *DataAges) Encode(buf *bytes.Buffer) (int, error) {
-	if !d.HasAnyAge() {
+	if !hasAnyAge {
 		return 0, fmt.Errorf("no data ages to encode")
 	}
 
 	bytesWritten := 0
 
+	// Determine which extensions need to be included based on presence of data
+	hasFirstExt := d.FL || d.ISA || d.FSA || d.AS || d.TAS || d.MH || d.BVR
+	hasSecondExt := d.GVR || d.GV || d.TAR || d.TID || d.TS || d.MET || d.ROA
+	hasThirdExt := d.ARA || d.SCC
+
 	// Create primary subfield
 	var octet1 uint8 = 0
-
 	if d.AOS {
 		octet1 |= 0x80 // bit 32
 	}
@@ -126,7 +114,7 @@ func (d *DataAges) Encode(buf *bytes.Buffer) (int, error) {
 	}
 
 	// Set extension bit if needed
-	if d.HasFirstExtension() || d.HasSecondExtension() || d.HasThirdExtension() {
+	if hasFirstExt || hasSecondExt || hasThirdExt {
 		octet1 |= 0x01 // bit 25 (FX)
 	}
 
@@ -136,90 +124,101 @@ func (d *DataAges) Encode(buf *bytes.Buffer) (int, error) {
 	}
 	bytesWritten++
 
-	// If no extension, write the actual ages for primary subfield
-	if octet1&0x01 == 0 {
-		// Write ages for primary subfield
-		if d.AOS {
-			if err := buf.WriteByte(d.AOSAge); err != nil {
-				return bytesWritten, fmt.Errorf("writing AOS age: %w", err)
-			}
-			bytesWritten++
+	// First extension if needed
+	if hasFirstExt || hasSecondExt || hasThirdExt {
+		var octet2 uint8 = 0
+		if d.FL {
+			octet2 |= 0x80 // bit 24
 		}
-		if d.TRD {
-			if err := buf.WriteByte(d.TRDAge); err != nil {
-				return bytesWritten, fmt.Errorf("writing TRD age: %w", err)
-			}
-			bytesWritten++
+		if d.ISA {
+			octet2 |= 0x40 // bit 23
 		}
-		if d.M3A {
-			if err := buf.WriteByte(d.M3AAge); err != nil {
-				return bytesWritten, fmt.Errorf("writing M3A age: %w", err)
-			}
-			bytesWritten++
+		if d.FSA {
+			octet2 |= 0x20 // bit 22
 		}
-		if d.QI {
-			if err := buf.WriteByte(d.QIAge); err != nil {
-				return bytesWritten, fmt.Errorf("writing QI age: %w", err)
-			}
-			bytesWritten++
+		if d.AS {
+			octet2 |= 0x10 // bit 21
 		}
-		if d.TI {
-			if err := buf.WriteByte(d.TIAge); err != nil {
-				return bytesWritten, fmt.Errorf("writing TI age: %w", err)
-			}
-			bytesWritten++
+		if d.TAS {
+			octet2 |= 0x08 // bit 20
 		}
-		if d.MAM {
-			if err := buf.WriteByte(d.MAMAge); err != nil {
-				return bytesWritten, fmt.Errorf("writing MAM age: %w", err)
-			}
-			bytesWritten++
+		if d.MH {
+			octet2 |= 0x04 // bit 19
 		}
-		if d.GH {
-			if err := buf.WriteByte(d.GHAge); err != nil {
-				return bytesWritten, fmt.Errorf("writing GH age: %w", err)
-			}
-			bytesWritten++
+		if d.BVR {
+			octet2 |= 0x02 // bit 18
 		}
-		return bytesWritten, nil
+
+		// Set extension bit if needed
+		if hasSecondExt || hasThirdExt {
+			octet2 |= 0x01 // bit 17 (FX)
+		}
+
+		// Write second octet
+		if err := buf.WriteByte(octet2); err != nil {
+			return bytesWritten, fmt.Errorf("writing first extension: %w", err)
+		}
+		bytesWritten++
 	}
 
-	// First extension
-	var octet2 uint8 = 0
-	if d.FL {
-		octet2 |= 0x80 // bit 24
-	}
-	if d.ISA {
-		octet2 |= 0x40 // bit 23
-	}
-	if d.FSA {
-		octet2 |= 0x20 // bit 22
-	}
-	if d.AS {
-		octet2 |= 0x10 // bit 21
-	}
-	if d.TAS {
-		octet2 |= 0x08 // bit 20
-	}
-	if d.MH {
-		octet2 |= 0x04 // bit 19
-	}
-	if d.BVR {
-		octet2 |= 0x02 // bit 18
+	// Second extension if needed
+	if hasSecondExt || hasThirdExt {
+		var octet3 uint8 = 0
+		if d.GVR {
+			octet3 |= 0x80 // bit 16
+		}
+		if d.GV {
+			octet3 |= 0x40 // bit 15
+		}
+		if d.TAR {
+			octet3 |= 0x20 // bit 14
+		}
+		if d.TID {
+			octet3 |= 0x10 // bit 13
+		}
+		if d.TS {
+			octet3 |= 0x08 // bit 12
+		}
+		if d.MET {
+			octet3 |= 0x04 // bit 11
+		}
+		if d.ROA {
+			octet3 |= 0x02 // bit 10
+		}
+
+		// Set extension bit if needed
+		if hasThirdExt {
+			octet3 |= 0x01 // bit 9 (FX)
+		}
+
+		// Write third octet
+		if err := buf.WriteByte(octet3); err != nil {
+			return bytesWritten, fmt.Errorf("writing second extension: %w", err)
+		}
+		bytesWritten++
 	}
 
-	// Set extension bit if needed
-	if d.HasSecondExtension() || d.HasThirdExtension() {
-		octet2 |= 0x01 // bit 17 (FX)
+	// Third extension if needed
+	if hasThirdExt {
+		var octet4 uint8 = 0
+		if d.ARA {
+			octet4 |= 0x80 // bit 8
+		}
+		if d.SCC {
+			octet4 |= 0x40 // bit 7
+		}
+		// Bits 6-2 are spare, set to 0
+		// Bit 1 is extension (FX), set to 0 for no further extension
+
+		// Write fourth octet
+		if err := buf.WriteByte(octet4); err != nil {
+			return bytesWritten, fmt.Errorf("writing third extension: %w", err)
+		}
+		bytesWritten++
 	}
 
-	// Write second octet
-	if err := buf.WriteByte(octet2); err != nil {
-		return bytesWritten, fmt.Errorf("writing first extension: %w", err)
-	}
-	bytesWritten++
-
-	// Write ages for primary subfield
+	// Now write all age values in order of their bits
+	// Primary subfield ages
 	if d.AOS {
 		if err := buf.WriteByte(d.AOSAge); err != nil {
 			return bytesWritten, fmt.Errorf("writing AOS age: %w", err)
@@ -263,90 +262,7 @@ func (d *DataAges) Encode(buf *bytes.Buffer) (int, error) {
 		bytesWritten++
 	}
 
-	// If no second extension, write the ages for first extension and return
-	if octet2&0x01 == 0 {
-		// Write ages for first extension
-		if d.FL {
-			if err := buf.WriteByte(d.FLAge); err != nil {
-				return bytesWritten, fmt.Errorf("writing FL age: %w", err)
-			}
-			bytesWritten++
-		}
-		if d.ISA {
-			if err := buf.WriteByte(d.ISAAge); err != nil {
-				return bytesWritten, fmt.Errorf("writing ISA age: %w", err)
-			}
-			bytesWritten++
-		}
-		if d.FSA {
-			if err := buf.WriteByte(d.FSAAge); err != nil {
-				return bytesWritten, fmt.Errorf("writing FSA age: %w", err)
-			}
-			bytesWritten++
-		}
-		if d.AS {
-			if err := buf.WriteByte(d.ASAge); err != nil {
-				return bytesWritten, fmt.Errorf("writing AS age: %w", err)
-			}
-			bytesWritten++
-		}
-		if d.TAS {
-			if err := buf.WriteByte(d.TASAge); err != nil {
-				return bytesWritten, fmt.Errorf("writing TAS age: %w", err)
-			}
-			bytesWritten++
-		}
-		if d.MH {
-			if err := buf.WriteByte(d.MHAge); err != nil {
-				return bytesWritten, fmt.Errorf("writing MH age: %w", err)
-			}
-			bytesWritten++
-		}
-		if d.BVR {
-			if err := buf.WriteByte(d.BVRAge); err != nil {
-				return bytesWritten, fmt.Errorf("writing BVR age: %w", err)
-			}
-			bytesWritten++
-		}
-		return bytesWritten, nil
-	}
-
-	// Second extension
-	var octet3 uint8 = 0
-	if d.GVR {
-		octet3 |= 0x80 // bit 16
-	}
-	if d.GV {
-		octet3 |= 0x40 // bit 15
-	}
-	if d.TAR {
-		octet3 |= 0x20 // bit 14
-	}
-	if d.TID {
-		octet3 |= 0x10 // bit 13
-	}
-	if d.TS {
-		octet3 |= 0x08 // bit 12
-	}
-	if d.MET {
-		octet3 |= 0x04 // bit 11
-	}
-	if d.ROA {
-		octet3 |= 0x02 // bit 10
-	}
-
-	// Set extension bit if needed
-	if d.HasThirdExtension() {
-		octet3 |= 0x01 // bit 9 (FX)
-	}
-
-	// Write third octet
-	if err := buf.WriteByte(octet3); err != nil {
-		return bytesWritten, fmt.Errorf("writing second extension: %w", err)
-	}
-	bytesWritten++
-
-	// Write ages for first extension
+	// First extension ages
 	if d.FL {
 		if err := buf.WriteByte(d.FLAge); err != nil {
 			return bytesWritten, fmt.Errorf("writing FL age: %w", err)
@@ -390,72 +306,7 @@ func (d *DataAges) Encode(buf *bytes.Buffer) (int, error) {
 		bytesWritten++
 	}
 
-	// If no third extension, write the ages for second extension and return
-	if octet3&0x01 == 0 {
-		// Write ages for second extension
-		if d.GVR {
-			if err := buf.WriteByte(d.GVRAge); err != nil {
-				return bytesWritten, fmt.Errorf("writing GVR age: %w", err)
-			}
-			bytesWritten++
-		}
-		if d.GV {
-			if err := buf.WriteByte(d.GVAge); err != nil {
-				return bytesWritten, fmt.Errorf("writing GV age: %w", err)
-			}
-			bytesWritten++
-		}
-		if d.TAR {
-			if err := buf.WriteByte(d.TARAge); err != nil {
-				return bytesWritten, fmt.Errorf("writing TAR age: %w", err)
-			}
-			bytesWritten++
-		}
-		if d.TID {
-			if err := buf.WriteByte(d.TIDAge); err != nil {
-				return bytesWritten, fmt.Errorf("writing TID age: %w", err)
-			}
-			bytesWritten++
-		}
-		if d.TS {
-			if err := buf.WriteByte(d.TSAge); err != nil {
-				return bytesWritten, fmt.Errorf("writing TS age: %w", err)
-			}
-			bytesWritten++
-		}
-		if d.MET {
-			if err := buf.WriteByte(d.METAge); err != nil {
-				return bytesWritten, fmt.Errorf("writing MET age: %w", err)
-			}
-			bytesWritten++
-		}
-		if d.ROA {
-			if err := buf.WriteByte(d.ROAAge); err != nil {
-				return bytesWritten, fmt.Errorf("writing ROA age: %w", err)
-			}
-			bytesWritten++
-		}
-		return bytesWritten, nil
-	}
-
-	// Third extension
-	var octet4 uint8 = 0
-	if d.ARA {
-		octet4 |= 0x80 // bit 8
-	}
-	if d.SCC {
-		octet4 |= 0x40 // bit 7
-	}
-	// Bits 6-2 are spare, set to 0
-	// Bit 1 is extension (FX), set to 0 for no further extension
-
-	// Write fourth octet
-	if err := buf.WriteByte(octet4); err != nil {
-		return bytesWritten, fmt.Errorf("writing third extension: %w", err)
-	}
-	bytesWritten++
-
-	// Write ages for second extension
+	// Second extension ages
 	if d.GVR {
 		if err := buf.WriteByte(d.GVRAge); err != nil {
 			return bytesWritten, fmt.Errorf("writing GVR age: %w", err)
@@ -499,7 +350,7 @@ func (d *DataAges) Encode(buf *bytes.Buffer) (int, error) {
 		bytesWritten++
 	}
 
-	// Write ages for third extension
+	// Third extension ages
 	if d.ARA {
 		if err := buf.WriteByte(d.ARAAge); err != nil {
 			return bytesWritten, fmt.Errorf("writing ARA age: %w", err)
