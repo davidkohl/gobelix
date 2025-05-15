@@ -9,10 +9,10 @@ import (
 
 // Record represents a single ASTERIX record
 type Record struct {
-	category Category
-	fspec    *FSPEC
-	items    map[string]DataItem
-	uap      UAP
+	category Category            // Category of this record
+	fspec    *FSPEC              // Field Specification
+	items    map[string]DataItem // Data items indexed by their reference (e.g., "I021/010")
+	uap      UAP                 // User Application Profile defining the structure
 }
 
 // NewRecord creates a new record for a specific category
@@ -56,7 +56,7 @@ func (r *Record) SetDataItem(id string, item DataItem) error {
 	}
 
 	if err := item.Validate(); err != nil {
-		return fmt.Errorf("validating %s: %w", id, err)
+		return WrapError(err, "validating %s", id)
 	}
 
 	r.items[id] = item
@@ -64,13 +64,14 @@ func (r *Record) SetDataItem(id string, item DataItem) error {
 }
 
 // GetDataItem retrieves a data item by its ID
-func (r *Record) GetDataItem(id string) (DataItem, string, bool) {
+func (r *Record) GetDataItem(id string) (DataItem, bool) {
 	item, exists := r.items[id]
-	return item, fmt.Sprintf("%T", item), exists
+	return item, exists
 }
 
 // Encode writes the record to a buffer
 func (r *Record) Encode(buf *bytes.Buffer) (int, error) {
+	// Validate the record against UAP rules
 	if err := r.uap.Validate(r.items); err != nil {
 		return 0, err
 	}
@@ -92,13 +93,22 @@ func (r *Record) Encode(buf *bytes.Buffer) (int, error) {
 
 		item, exists := r.items[field.DataItem]
 		if !exists {
-			return bytesWritten, fmt.Errorf("%w: %s marked in FSPEC but not present",
-				ErrInvalidMessage, field.DataItem)
+			return bytesWritten, NewEncodingError(
+				r.category,
+				field.DataItem,
+				fmt.Sprintf("FRN %d marked in FSPEC but item not present", field.FRN),
+				ErrInvalidMessage,
+			)
 		}
 
 		n, err := item.Encode(buf)
 		if err != nil {
-			return bytesWritten, fmt.Errorf("encoding %s: %w", field.DataItem, err)
+			return bytesWritten, NewEncodingError(
+				r.category,
+				field.DataItem,
+				"failed to encode item",
+				err,
+			)
 		}
 		bytesWritten += n
 	}
@@ -117,7 +127,12 @@ func (r *Record) Decode(buf *bytes.Buffer) (int, error) {
 	// Read FSPEC
 	n, err := r.fspec.Decode(buf)
 	if err != nil {
-		return bytesRead, fmt.Errorf("decoding FSPEC: %w", err)
+		return bytesRead, NewDecodeError(
+			r.category,
+			"",
+			"decoding FSPEC",
+			err,
+		)
 	}
 	bytesRead += n
 
@@ -130,35 +145,143 @@ func (r *Record) Decode(buf *bytes.Buffer) (int, error) {
 			continue
 		}
 
-		// Check if we have enough bytes for fixed-length items
-		if field.Type == Fixed && buf.Len() < int(field.Length) {
-			return bytesRead, fmt.Errorf("buffer too short for %s: need %d bytes, have %d",
-				field.DataItem, field.Length, buf.Len())
-		}
-
+		// Create data item
 		item, err := r.uap.CreateDataItem(field.DataItem)
 		if err != nil {
+			// For fixed length items, skip over the bytes if we can't create the item
 			if field.Type == Fixed {
-				// For fixed length items, we can skip unknown ones
 				if buf.Len() < int(field.Length) {
-					return bytesRead, fmt.Errorf("buffer too short to skip %s: need %d bytes, have %d",
-						field.DataItem, field.Length, buf.Len())
+					return bytesRead, NewDecodeError(
+						r.category,
+						field.DataItem,
+						fmt.Sprintf("buffer too short to skip field: need %d bytes, have %d", field.Length, buf.Len()),
+						ErrBufferTooShort,
+					)
 				}
 				buf.Next(int(field.Length))
 				bytesRead += int(field.Length)
 				continue
 			}
-			return bytesRead, fmt.Errorf("creating %s: %w", field.DataItem, err)
+			return bytesRead, NewDecodeError(
+				r.category,
+				field.DataItem,
+				"creating data item",
+				err,
+			)
 		}
 
+		// Decode the item
 		n, err := item.Decode(buf)
 		if err != nil {
-			return bytesRead, fmt.Errorf("decoding %s: %w", field.DataItem, err)
+			return bytesRead, NewDecodeError(
+				r.category,
+				field.DataItem,
+				"decoding data item",
+				err,
+			).WithPosition(bytesRead, buf.Len()+bytesRead)
 		}
 		bytesRead += n
 
+		// Store the item
 		r.items[field.DataItem] = item
 	}
 
-	return bytesRead, r.uap.Validate(r.items)
+	// Validate the record
+	if err := r.uap.Validate(r.items); err != nil {
+		return bytesRead, err
+	}
+
+	return bytesRead, nil
+}
+
+// Category returns the category of this record
+func (r *Record) Category() Category {
+	return r.category
+}
+
+// UAP returns the UAP used by this record
+func (r *Record) UAP() UAP {
+	return r.uap
+}
+
+// FSPEC returns the field specification of this record
+func (r *Record) FSPEC() *FSPEC {
+	return r.fspec
+}
+
+// Items returns a map of all data items in this record
+func (r *Record) Items() map[string]DataItem {
+	// Return a copy to prevent modification
+	items := make(map[string]DataItem, len(r.items))
+	for k, v := range r.items {
+		items[k] = v
+	}
+	return items
+}
+
+// ItemCount returns the number of data items in this record
+func (r *Record) ItemCount() int {
+	return len(r.items)
+}
+
+// HasDataItem checks if a specific data item is present
+func (r *Record) HasDataItem(id string) bool {
+	_, exists := r.items[id]
+	return exists
+}
+
+// EstimateSize estimates the encoded size of this record in bytes
+func (r *Record) EstimateSize() int {
+	size := r.fspec.Size() // FSPEC size
+
+	// Add size of each data item
+	for _, field := range r.uap.Fields() {
+		if !r.fspec.GetFRN(field.FRN) {
+			continue
+		}
+
+		if field.Type == Fixed {
+			size += int(field.Length)
+			continue
+		}
+
+		// For non-fixed items, we need a rough estimate
+		// This is just an estimate, the actual size may differ
+		size += 4 // Reasonable default size
+	}
+
+	return size
+}
+
+// Clone creates a deep copy of this record
+func (r *Record) Clone() (*Record, error) {
+	newRecord, err := NewRecord(r.category, r.uap)
+	if err != nil {
+		return nil, err
+	}
+
+	// Encode to buffer and decode to create a deep copy
+	buf := new(bytes.Buffer)
+	_, err = r.Encode(buf)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = newRecord.Decode(buf)
+	if err != nil {
+		return nil, err
+	}
+
+	return newRecord, nil
+}
+
+// Reset clears all data items but keeps the category and UAP
+func (r *Record) Reset() {
+	r.fspec = NewFSPEC()
+	r.items = make(map[string]DataItem)
+}
+
+// Validate checks if the record is valid according to the UAP
+func (r *Record) Validate() error {
+	return r.uap.Validate(r.items)
 }
