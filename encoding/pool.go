@@ -117,21 +117,21 @@ func (p *BufferPool) GetExact(size int) []byte {
 	return buf
 }
 
-// defaultBufferPool is the package-level buffer pool that can be used
+// DefaultBufferPool is the package-level buffer pool that can be used
 // by all components in the package.
-var defaultBufferPool = NewBufferPool()
+var DefaultBufferPool = NewBufferPool()
 
 // GetBuffer retrieves a buffer from the default pool with at least the specified capacity
 func GetBuffer(capacity int) []byte {
-	return defaultBufferPool.Get(capacity)
+	return DefaultBufferPool.Get(capacity)
 }
 
 // PutBuffer returns a buffer to the default pool
 func PutBuffer(buf []byte) {
-	defaultBufferPool.Put(buf)
+	DefaultBufferPool.Put(buf)
 }
 
 // GetBufferWithSize retrieves a buffer from the default pool with the specified size
 func GetBufferWithSize(size int) []byte {
-	return defaultBufferPool.GetWithSize(size)
+	return DefaultBufferPool.GetWithSize(size)
 }

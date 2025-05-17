@@ -5,6 +5,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// Global flags
+var (
+	Verbose  bool
+	JsonLogs bool
+)
+
 var rootCmd = &cobra.Command{
 	Use:   "idefix",
 	Short: "ASTERIX message decoder and analyzer",
@@ -34,10 +40,11 @@ func Execute() error {
 
 func init() {
 	// Global flags
-	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "Enable verbose output")
+	rootCmd.PersistentFlags().BoolVarP(&Verbose, "verbose", "v", false, "Enable verbose output")
+	rootCmd.PersistentFlags().BoolVar(&JsonLogs, "json", false, "Log in JSON format")
 
 	// Version flag
 	rootCmd.Flags().BoolP("version", "V", false, "Print version information")
 	rootCmd.SetVersionTemplate("Idefix v{{.Version}} - ASTERIX decoder companion\n")
-	rootCmd.Version = "0.1.0" // Set your version here
+	rootCmd.Version = "0.2.0" // Updated version number
 }

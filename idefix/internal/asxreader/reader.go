@@ -1,10 +1,10 @@
-package asxreader
-
-// reader.go
+// internal/asxreader/reader.go
+package net
 
 import (
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/davidkohl/gobelix/asterix"
 )
@@ -13,8 +13,26 @@ import (
 // regardless of the underlying transport protocol
 type AsterixReader interface {
 	io.Closer
-	Next() (*asterix.AsterixMessage, error)
+	Next() (*asterix.DataBlock, error)
 	Protocol() string
+	Stats() ReaderStats
+}
+
+// ReaderStats contains statistics about the reader
+type ReaderStats struct {
+	BytesRead       int64
+	MessagesRead    int64
+	ConnectionTime  time.Duration
+	SourceAddr      string // Remote address (if applicable)
+	TransportErrors int    // Number of transport errors
+	StartTime       time.Time
+}
+
+// NewReaderStats creates a new ReaderStats struct
+func NewReaderStats() ReaderStats {
+	return ReaderStats{
+		StartTime: time.Now(),
+	}
 }
 
 // NewAsterixReader creates an appropriate AsterixReader based on protocol

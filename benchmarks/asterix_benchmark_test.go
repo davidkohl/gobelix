@@ -155,7 +155,7 @@ func BenchmarkDecoderDecode(b *testing.B) {
 
 	// Create decoder and register UAP
 	uap, _ := cat021.NewUAP(cat021.Version26)
-	decoder := encoding.NewDecoder(encoding.WithPreloadedUAPs(uap))
+	decoder := asterix.NewDecoder(asterix.WithPreloadedUAPs(uap))
 
 	b.ResetTimer()
 
@@ -173,9 +173,9 @@ func BenchmarkDecoderWithPoolDecode(b *testing.B) {
 
 	// Create decoder with pool and register UAP
 	uap, _ := cat021.NewUAP(cat021.Version26)
-	decoder := encoding.NewDecoder(
-		encoding.WithPreloadedUAPs(uap),
-		encoding.WithDecoderBufferPool(pool),
+	decoder := asterix.NewDecoder(
+		asterix.WithPreloadedUAPs(uap),
+		asterix.WithDecoderBufferPool(pool),
 	)
 
 	b.ResetTimer()
@@ -228,7 +228,7 @@ func BenchmarkDirectEncode(b *testing.B) {
 // BenchmarkEncoderEncode tests encoding using our encoder implementation
 func BenchmarkEncoderEncode(b *testing.B) {
 	// Create encoder
-	encoder := encoding.NewEncoder()
+	encoder := asterix.NewEncoder()
 
 	// Get the UAP
 	uap, _ := cat021.NewUAP(cat021.Version26)
@@ -274,7 +274,7 @@ func BenchmarkEncoderWithPoolEncode(b *testing.B) {
 	pool := encoding.NewBufferPool()
 
 	// Create encoder with pool
-	encoder := encoding.NewEncoder(encoding.WithBufferPool(pool))
+	encoder := asterix.NewEncoder(asterix.WithBufferPool(pool))
 
 	// Get the UAP
 	uap, _ := cat021.NewUAP(cat021.Version26)
@@ -317,7 +317,7 @@ func BenchmarkEncoderWithPoolEncode(b *testing.B) {
 // BenchmarkEncoderBatchEncode tests batch encoding using our encoder implementation
 func BenchmarkEncoderBatchEncode(b *testing.B) {
 	// Create encoder
-	encoder := encoding.NewEncoder()
+	encoder := asterix.NewEncoder()
 
 	// Get the UAP
 	uap, _ := cat021.NewUAP(cat021.Version26)
@@ -363,9 +363,9 @@ func BenchmarkParallelDecode(b *testing.B) {
 
 	// Create decoder with 4 parallel workers
 	uap, _ := cat021.NewUAP(cat021.Version26)
-	decoder := encoding.NewDecoder(
-		encoding.WithPreloadedUAPs(uap),
-		encoding.WithDecoderParallelism(4),
+	decoder := asterix.NewDecoder(
+		asterix.WithPreloadedUAPs(uap),
+		asterix.WithDecoderParallelism(4),
 	)
 
 	b.ResetTimer()
@@ -388,7 +388,7 @@ func BenchmarkStreamDecode(b *testing.B) {
 
 	// Create decoder
 	uap, _ := cat021.NewUAP(cat021.Version26)
-	decoder := encoding.NewDecoder(encoding.WithPreloadedUAPs(uap))
+	decoder := asterix.NewDecoder(asterix.WithPreloadedUAPs(uap))
 
 	b.ResetTimer()
 
@@ -409,7 +409,7 @@ func BenchmarkEncoderWithPoolReuse(b *testing.B) {
 	pool := encoding.NewBufferPool()
 
 	// Create encoder with pool
-	encoder := encoding.NewEncoder(encoding.WithBufferPool(pool))
+	encoder := asterix.NewEncoder(asterix.WithBufferPool(pool))
 
 	// Get the UAP
 	uap, _ := cat021.NewUAP(cat021.Version26)
@@ -456,10 +456,10 @@ func BenchmarkMemoryPressure(b *testing.B) {
 
 	// Create decoders
 	uap, _ := cat021.NewUAP(cat021.Version26)
-	standardDecoder := encoding.NewDecoder(encoding.WithPreloadedUAPs(uap))
-	pooledDecoder := encoding.NewDecoder(
-		encoding.WithPreloadedUAPs(uap),
-		encoding.WithDecoderBufferPool(encoding.NewBufferPool()),
+	standardDecoder := asterix.NewDecoder(asterix.WithPreloadedUAPs(uap))
+	pooledDecoder := asterix.NewDecoder(
+		asterix.WithPreloadedUAPs(uap),
+		asterix.WithDecoderBufferPool(encoding.NewBufferPool()),
 	)
 
 	b.Run("StandardDecoder", func(b *testing.B) {

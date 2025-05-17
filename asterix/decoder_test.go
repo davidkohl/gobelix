@@ -1,5 +1,5 @@
 // encoding/decoder_test.go
-package encoding
+package asterix
 
 import (
 	"bytes"
@@ -8,104 +8,20 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/davidkohl/gobelix/asterix"
+	"github.com/davidkohl/gobelix/encoding"
 )
-
-// MockUAP implements asterix.UAP for testing
-type MockUAP struct {
-	category       asterix.Category
-	version        string
-	fields         []asterix.DataField
-	createItemFunc func(id string) (asterix.DataItem, error)
-}
-
-func (m *MockUAP) Category() asterix.Category {
-	return m.category
-}
-
-func (m *MockUAP) Version() string {
-	return m.version
-}
-
-func (m *MockUAP) Fields() []asterix.DataField {
-	return m.fields
-}
-
-func (m *MockUAP) CreateDataItem(id string) (asterix.DataItem, error) {
-	if m.createItemFunc != nil {
-		return m.createItemFunc(id)
-	}
-
-	// Default implementation
-	switch id {
-	case "I021/010":
-		return &MockDataItem{id: id, data: []byte{0x01, 0x02}, fixedLen: 2}, nil
-	case "I021/040":
-		return &MockDataItem{id: id, data: []byte{0xFF}, fixedLen: 1}, nil
-	case "I021/030":
-		return &MockDataItem{id: id, data: []byte{0x03, 0x04, 0x05}, fixedLen: 3}, nil
-	case "UnknownItem":
-		return nil, fmt.Errorf("unknown item: %s", id)
-	default:
-		return nil, fmt.Errorf("%w: %s", asterix.ErrUnknownDataItem, id)
-	}
-}
-
-func (m *MockUAP) Validate(items map[string]asterix.DataItem) error {
-	// Check mandatory fields
-	for _, field := range m.fields {
-		if field.Mandatory {
-			if _, exists := items[field.DataItem]; !exists {
-				return fmt.Errorf("%w: %s", asterix.ErrMandatoryField, field.DataItem)
-			}
-		}
-	}
-	return nil
-}
-
-// MockDataItem implements DataItem for testing
-type MockDataItem struct {
-	id          string
-	data        []byte
-	fixedLen    int
-	decodeErr   error
-	encodeErr   error
-	validateErr error
-}
-
-func (m *MockDataItem) Encode(buf *bytes.Buffer) (int, error) {
-	if m.encodeErr != nil {
-		return 0, m.encodeErr
-	}
-	return buf.Write(m.data)
-}
-
-func (m *MockDataItem) Decode(buf *bytes.Buffer) (int, error) {
-	if m.decodeErr != nil {
-		return 0, m.decodeErr
-	}
-	if buf.Len() < m.fixedLen {
-		return 0, fmt.Errorf("buffer too short: need %d bytes, have %d", m.fixedLen, buf.Len())
-	}
-	m.data = make([]byte, m.fixedLen)
-	return buf.Read(m.data)
-}
-
-func (m *MockDataItem) Validate() error {
-	return m.validateErr
-}
 
 func setupTestDecoder() (*Decoder, *MockUAP) {
 	// Create a mock UAP for testing
 	mockUAP := &MockUAP{
-		category: asterix.Cat021,
+		category: Cat021,
 		version:  "1.0",
-		fields: []asterix.DataField{
+		fields: []DataField{
 			{
 				FRN:         1,
 				DataItem:    "I021/010",
 				Description: "Data Source Identifier",
-				Type:        asterix.Fixed,
+				Type:        Fixed,
 				Length:      2,
 				Mandatory:   true,
 			},
@@ -113,7 +29,7 @@ func setupTestDecoder() (*Decoder, *MockUAP) {
 				FRN:         2,
 				DataItem:    "I021/040",
 				Description: "Target Report Descriptor",
-				Type:        asterix.Fixed,
+				Type:        Fixed,
 				Length:      1,
 				Mandatory:   true,
 			},
@@ -121,7 +37,7 @@ func setupTestDecoder() (*Decoder, *MockUAP) {
 				FRN:         3,
 				DataItem:    "I021/030",
 				Description: "Time of Day",
-				Type:        asterix.Fixed,
+				Type:        Fixed,
 				Length:      3,
 				Mandatory:   false,
 			},
@@ -133,7 +49,7 @@ func setupTestDecoder() (*Decoder, *MockUAP) {
 }
 
 // createTestMessage creates a simple ASTERIX message for testing
-func createTestMessage(category asterix.Category, itemData map[string][]byte) []byte {
+func createTestMessage(category Category, itemData map[string][]byte) []byte {
 	// Create a buffer with initial capacity
 	buf := bytes.NewBuffer(make([]byte, 0, 64))
 
@@ -186,7 +102,7 @@ func createMultipleMessages(count int) []byte {
 		if i%2 == 0 {
 			itemData["I021/030"] = []byte{byte(i + 3), byte(i + 4), byte(i + 5)}
 		}
-		msg := createTestMessage(asterix.Cat021, itemData)
+		msg := createTestMessage(Cat021, itemData)
 		buf.Write(msg)
 	}
 	return buf.Bytes()
@@ -209,16 +125,16 @@ func TestNewDecoder(t *testing.T) {
 	}
 
 	// Test with custom buffer pool
-	customPool := NewBufferPool()
+	customPool := encoding.NewBufferPool()
 	decoder = NewDecoder(WithDecoderBufferPool(customPool))
 	if decoder.pool != customPool {
 		t.Error("buffer pool not set correctly")
 	}
 
 	// Test with preloaded UAPs
-	mockUAP := &MockUAP{category: asterix.Cat021}
+	mockUAP := &MockUAP{category: Cat021}
 	decoder = NewDecoder(WithPreloadedUAPs(mockUAP))
-	if uap := decoder.GetUAP(asterix.Cat021); uap != mockUAP {
+	if uap := decoder.GetUAP(Cat021); uap != mockUAP {
 		t.Error("UAP not registered correctly")
 	}
 }
@@ -227,15 +143,15 @@ func TestRegisterUAP(t *testing.T) {
 	decoder := NewDecoder()
 
 	// Register a valid UAP
-	mockUAP := &MockUAP{category: asterix.Cat021}
+	mockUAP := &MockUAP{category: Cat021}
 	decoder.RegisterUAP(mockUAP)
-	if uap := decoder.GetUAP(asterix.Cat021); uap != mockUAP {
+	if uap := decoder.GetUAP(Cat021); uap != mockUAP {
 		t.Error("UAP not registered correctly")
 	}
 
 	// Register nil UAP should be a no-op
 	decoder.RegisterUAP(nil)
-	if uap := decoder.GetUAP(asterix.Cat021); uap != mockUAP {
+	if uap := decoder.GetUAP(Cat021); uap != mockUAP {
 		t.Error("Registering nil UAP modified existing UAP")
 	}
 }
@@ -277,7 +193,7 @@ func TestDecode(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			msg := createTestMessage(asterix.Cat021, tc.itemData)
+			msg := createTestMessage(Cat021, tc.itemData)
 
 			// Decode the message
 			block, err := decoder.Decode(msg)
@@ -293,8 +209,8 @@ func TestDecode(t *testing.T) {
 				if block == nil {
 					t.Fatal("Decode() returned nil block")
 				}
-				if block.Category() != asterix.Cat021 {
-					t.Errorf("Category = %v, want %v", block.Category(), asterix.Cat021)
+				if block.Category() != Cat021 {
+					t.Errorf("Category = %v, want %v", block.Category(), Cat021)
 				}
 				if block.RecordCount() != 1 {
 					t.Errorf("RecordCount = %d, want 1", block.RecordCount())
@@ -321,7 +237,7 @@ func TestDecode(t *testing.T) {
 
 	t.Run("Invalid category", func(t *testing.T) {
 		// Create a message with an invalid category
-		msg := createTestMessage(asterix.Category(0), map[string][]byte{
+		msg := createTestMessage(Category(0), map[string][]byte{
 			"I021/010": {0xAA, 0xBB},
 			"I021/040": {0xCC},
 		})
@@ -335,7 +251,7 @@ func TestDecode(t *testing.T) {
 
 	t.Run("Unknown category", func(t *testing.T) {
 		// Create a message with a category not registered with the decoder
-		msg := createTestMessage(asterix.Cat048, map[string][]byte{
+		msg := createTestMessage(Cat048, map[string][]byte{
 			"I021/010": {0xAA, 0xBB},
 			"I021/040": {0xCC},
 		})
@@ -356,7 +272,7 @@ func TestDecodeFrom(t *testing.T) {
 		"I021/040": {0xCC},
 		"I021/030": {0xDD, 0xEE, 0xFF},
 	}
-	msg := createTestMessage(asterix.Cat021, itemData)
+	msg := createTestMessage(Cat021, itemData)
 
 	// Test successful decoding
 	t.Run("Success", func(t *testing.T) {
@@ -368,8 +284,8 @@ func TestDecodeFrom(t *testing.T) {
 		if block == nil {
 			t.Fatal("DecodeFrom() returned nil block")
 		}
-		if block.Category() != asterix.Cat021 {
-			t.Errorf("Category = %v, want %v", block.Category(), asterix.Cat021)
+		if block.Category() != Cat021 {
+			t.Errorf("Category = %v, want %v", block.Category(), Cat021)
 		}
 		if block.RecordCount() != 1 {
 			t.Errorf("RecordCount = %d, want 1", block.RecordCount())
@@ -437,8 +353,8 @@ func TestDecodeAll(t *testing.T) {
 		}
 		// Check each block
 		for i, block := range blocks {
-			if block.Category() != asterix.Cat021 {
-				t.Errorf("Block %d: Category = %v, want %v", i, block.Category(), asterix.Cat021)
+			if block.Category() != Cat021 {
+				t.Errorf("Block %d: Category = %v, want %v", i, block.Category(), Cat021)
 			}
 			if block.RecordCount() != 1 {
 				t.Errorf("Block %d: RecordCount = %d, want 1", i, block.RecordCount())
@@ -465,7 +381,7 @@ func TestDecodeAll(t *testing.T) {
 	t.Run("Invalid message in the middle", func(t *testing.T) {
 		data := createMultipleMessages(3)
 		// Corrupt the second message's category
-		data[len(createTestMessage(asterix.Cat021, nil))] = 0 // Set invalid category
+		data[len(createTestMessage(Cat021, nil))] = 0 // Set invalid category
 		blocks, err := decoder.DecodeAll(data)
 		if err == nil {
 			t.Error("DecodeAll() with invalid message should return error")
@@ -488,7 +404,7 @@ func TestDecodeParallel(t *testing.T) {
 			"I021/010": {0xAA, byte(i)},
 			"I021/040": {0xCC},
 		}
-		messages[i] = createTestMessage(asterix.Cat021, itemData)
+		messages[i] = createTestMessage(Cat021, itemData)
 	}
 
 	// Test successful parallel decoding
@@ -538,11 +454,11 @@ func TestStreamDecode(t *testing.T) {
 	// Test successful stream decoding
 	var decodedCount int
 	var mu sync.Mutex
-	err := decoder.StreamDecode(r, func(block *asterix.DataBlock) error {
+	err := decoder.StreamDecode(r, func(block *DataBlock) error {
 		mu.Lock()
 		defer mu.Unlock()
 		decodedCount++
-		if block.Category() != asterix.Cat021 {
+		if block.Category() != Cat021 {
 			return fmt.Errorf("unexpected category: %v", block.Category())
 		}
 		return nil
@@ -557,7 +473,7 @@ func TestStreamDecode(t *testing.T) {
 	// Test with callback returning error
 	r = bytes.NewReader(data)
 	callbackErr := fmt.Errorf("callback error")
-	err = decoder.StreamDecode(r, func(block *asterix.DataBlock) error {
+	err = decoder.StreamDecode(r, func(block *DataBlock) error {
 		return callbackErr
 	})
 	if err == nil || err.Error() != "callback error: callback error" {
@@ -569,7 +485,7 @@ func TestStreamDecode(t *testing.T) {
 	invalidData = append(invalidData, createMultipleMessages(1)...)
 	r = bytes.NewReader(invalidData)
 	decodedCount = 0
-	err = decoder.StreamDecode(r, func(block *asterix.DataBlock) error {
+	err = decoder.StreamDecode(r, func(block *DataBlock) error {
 		mu.Lock()
 		defer mu.Unlock()
 		decodedCount++
@@ -613,7 +529,7 @@ func TestExtractMessages(t *testing.T) {
 	// Verify each extracted message is valid
 	for i, msg := range messages {
 		// Category should be valid
-		if asterix.Category(msg[0]) != asterix.Cat021 {
+		if Category(msg[0]) != Cat021 {
 			t.Errorf("Message %d has invalid category %d", i, msg[0])
 		}
 		// Length should match
@@ -643,7 +559,7 @@ func BenchmarkDecode(b *testing.B) {
 		"I021/040": {0xCC},
 		"I021/030": {0xDD, 0xEE, 0xFF},
 	}
-	msg := createTestMessage(asterix.Cat021, itemData)
+	msg := createTestMessage(Cat021, itemData)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -680,7 +596,7 @@ func BenchmarkDecodeParallel(b *testing.B) {
 			"I021/010": {0xAA, byte(i)},
 			"I021/040": {0xCC},
 		}
-		messages[i] = createTestMessage(asterix.Cat021, itemData)
+		messages[i] = createTestMessage(Cat021, itemData)
 	}
 
 	b.ResetTimer()
@@ -701,7 +617,7 @@ func BenchmarkStreamDecode(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		r := bytes.NewReader(data)
-		err := decoder.StreamDecode(r, func(block *asterix.DataBlock) error {
+		err := decoder.StreamDecode(r, func(block *DataBlock) error {
 			return nil
 		})
 		if err != nil {

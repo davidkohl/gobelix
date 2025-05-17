@@ -1,12 +1,12 @@
 // encoding/decoder.go
-package encoding
+package asterix
 
 import (
 	"fmt"
 	"io"
 	"sync"
 
-	"github.com/davidkohl/gobelix/asterix"
+	"github.com/davidkohl/gobelix/encoding"
 )
 
 // DecoderOption defines a functional option for configuring the Decoder
@@ -15,9 +15,9 @@ type DecoderOption func(*Decoder)
 // Decoder provides optimized decoding of ASTERIX messages
 type Decoder struct {
 	// Configuration options
-	parallelism int                              // Number of parallel decoding goroutines
-	pool        *BufferPool                      // Buffer pool for reusing memory
-	uapCache    map[asterix.Category]asterix.UAP // Cache of UAPs for categories
+	parallelism int                  // Number of parallel decoding ∏
+	pool        *encoding.BufferPool // Buffer pool for reusing memory
+	uapCache    map[Category]UAP     // Cache of UAPs for categories
 
 	// For tracking messages in stream mode
 	streamMu     sync.Mutex
@@ -34,7 +34,7 @@ func WithDecoderParallelism(n int) DecoderOption {
 }
 
 // WithDecoderBufferPool sets the buffer pool to use for decoding
-func WithDecoderBufferPool(pool *BufferPool) DecoderOption {
+func WithDecoderBufferPool(pool *encoding.BufferPool) DecoderOption {
 	return func(d *Decoder) {
 		if pool != nil {
 			d.pool = pool
@@ -43,7 +43,7 @@ func WithDecoderBufferPool(pool *BufferPool) DecoderOption {
 }
 
 // WithPreloadedUAPs adds UAPs to the decoder's cache
-func WithPreloadedUAPs(uaps ...asterix.UAP) DecoderOption {
+func WithPreloadedUAPs(uaps ...UAP) DecoderOption {
 	return func(d *Decoder) {
 		for _, uap := range uaps {
 			if uap != nil {
@@ -57,8 +57,8 @@ func WithPreloadedUAPs(uaps ...asterix.UAP) DecoderOption {
 func NewDecoder(opts ...DecoderOption) *Decoder {
 	decoder := &Decoder{
 		parallelism:  DefaultParallelism,
-		pool:         defaultBufferPool, // Use the package-level default
-		uapCache:     make(map[asterix.Category]asterix.UAP),
+		pool:         encoding.DefaultBufferPool, // Use the package-level default
+		uapCache:     make(map[Category]UAP),
 		streamBuffer: make([]byte, 0, 4096), // Initial stream buffer capacity
 	}
 
@@ -71,7 +71,7 @@ func NewDecoder(opts ...DecoderOption) *Decoder {
 }
 
 // RegisterUAP adds a UAP to the decoder's cache
-func (d *Decoder) RegisterUAP(uap asterix.UAP) {
+func (d *Decoder) RegisterUAP(uap UAP) {
 	if uap == nil {
 		return
 	}
@@ -79,30 +79,30 @@ func (d *Decoder) RegisterUAP(uap asterix.UAP) {
 }
 
 // GetUAP retrieves a UAP from the cache or returns nil if not found
-func (d *Decoder) GetUAP(category asterix.Category) asterix.UAP {
+func (d *Decoder) GetUAP(category Category) UAP {
 	return d.uapCache[category]
 }
 
 // Decode parses an ASTERIX data block from bytes
-func (d *Decoder) Decode(data []byte) (*asterix.DataBlock, error) {
+func (d *Decoder) Decode(data []byte) (*DataBlock, error) {
 	if len(data) < 3 {
-		return nil, fmt.Errorf("data too short for ASTERIX message: %w", asterix.ErrInvalidMessage)
+		return nil, fmt.Errorf("data too short for ASTERIX message: %w", ErrInvalidMessage)
 	}
 
 	// Extract category from data
-	cat := asterix.Category(data[0])
+	cat := Category(data[0])
 	if !cat.IsValid() {
-		return nil, fmt.Errorf("invalid ASTERIX category %d: %w", cat, asterix.ErrInvalidCategory)
+		return nil, fmt.Errorf("invalid ASTERIX category %d: %w", cat, ErrInvalidCategory)
 	}
 
 	// Get the UAP for this category
 	uap := d.uapCache[cat]
 	if uap == nil {
-		return nil, fmt.Errorf("no UAP registered for category %d: %w", cat, asterix.ErrUAPNotDefined)
+		return nil, fmt.Errorf("no UAP registered for category %d: %w", cat, ErrUAPNotDefined)
 	}
 
 	// Create a new data block
-	dataBlock, err := asterix.NewDataBlock(cat, uap)
+	dataBlock, err := NewDataBlock(cat, uap)
 	if err != nil {
 		return nil, fmt.Errorf("creating data block: %w", err)
 	}
@@ -116,7 +116,7 @@ func (d *Decoder) Decode(data []byte) (*asterix.DataBlock, error) {
 }
 
 // DecodeFrom decodes an ASTERIX data block from a reader
-func (d *Decoder) DecodeFrom(r io.Reader) (*asterix.DataBlock, error) {
+func (d *Decoder) DecodeFrom(r io.Reader) (*DataBlock, error) {
 	// Read the header (3 bytes - CAT + LEN)
 	header := d.pool.GetWithSize(3)
 	defer d.pool.Put(header)
@@ -126,21 +126,21 @@ func (d *Decoder) DecodeFrom(r io.Reader) (*asterix.DataBlock, error) {
 	}
 
 	// Check if the category is valid
-	cat := asterix.Category(header[0])
+	cat := Category(header[0])
 	if !cat.IsValid() {
-		return nil, fmt.Errorf("invalid ASTERIX category %d: %w", cat, asterix.ErrInvalidCategory)
+		return nil, fmt.Errorf("invalid ASTERIX category %d: %w", cat, ErrInvalidCategory)
 	}
 
 	// Get the UAP for this category
 	uap := d.uapCache[cat]
 	if uap == nil {
-		return nil, fmt.Errorf("no UAP registered for category %d: %w", cat, asterix.ErrUAPNotDefined)
+		return nil, fmt.Errorf("no UAP registered for category %d: %w", cat, ErrUAPNotDefined)
 	}
 
 	// Get the message length
 	length := int(header[1])<<8 | int(header[2])
 	if length < 3 {
-		return nil, fmt.Errorf("invalid message length %d: %w", length, asterix.ErrInvalidLength)
+		return nil, fmt.Errorf("invalid message length %d: %w", length, ErrInvalidLength)
 	}
 
 	// Allocate a buffer for the full message
@@ -156,7 +156,7 @@ func (d *Decoder) DecodeFrom(r io.Reader) (*asterix.DataBlock, error) {
 	}
 
 	// Create and decode the data block
-	dataBlock, err := asterix.NewDataBlock(cat, uap)
+	dataBlock, err := NewDataBlock(cat, uap)
 	if err != nil {
 		return nil, fmt.Errorf("creating data block: %w", err)
 	}
@@ -169,26 +169,26 @@ func (d *Decoder) DecodeFrom(r io.Reader) (*asterix.DataBlock, error) {
 }
 
 // DecodeAll decodes multiple ASTERIX data blocks from bytes
-func (d *Decoder) DecodeAll(data []byte) ([]*asterix.DataBlock, error) {
-	var results []*asterix.DataBlock
+func (d *Decoder) DecodeAll(data []byte) ([]*DataBlock, error) {
+	var results []*DataBlock
 	offset := 0
 
 	for offset < len(data) {
 		// Ensure we have enough data for at least the header
 		if offset+3 > len(data) {
-			return results, fmt.Errorf("incomplete header at offset %d: %w", offset, asterix.ErrTruncatedMessage)
+			return results, fmt.Errorf("incomplete header at offset %d: %w", offset, ErrTruncatedMessage)
 		}
 
 		// Get the message length
 		length := int(data[offset+1])<<8 | int(data[offset+2])
 		if length < 3 {
-			return results, fmt.Errorf("invalid message length %d at offset %d: %w", length, offset, asterix.ErrInvalidLength)
+			return results, fmt.Errorf("invalid message length %d at offset %d: %w", length, offset, ErrInvalidLength)
 		}
 
 		// Ensure we have enough data for the complete message
 		if offset+length > len(data) {
 			return results, fmt.Errorf("incomplete message at offset %d (need %d bytes, have %d): %w",
-				offset, length, len(data)-offset, asterix.ErrTruncatedMessage)
+				offset, length, len(data)-offset, ErrTruncatedMessage)
 		}
 
 		// Decode this message
@@ -205,10 +205,10 @@ func (d *Decoder) DecodeAll(data []byte) ([]*asterix.DataBlock, error) {
 }
 
 // DecodeParallel decodes multiple ASTERIX data blocks in parallel
-func (d *Decoder) DecodeParallel(data [][]byte) ([]*asterix.DataBlock, error) {
+func (d *Decoder) DecodeParallel(data [][]byte) ([]*DataBlock, error) {
 	if d.parallelism <= 1 || len(data) <= 1 {
 		// Use sequential decoding for small batches or when parallelism is disabled
-		results := make([]*asterix.DataBlock, len(data))
+		results := make([]*DataBlock, len(data))
 		for i, msgData := range data {
 			block, err := d.Decode(msgData)
 			if err != nil {
@@ -220,7 +220,7 @@ func (d *Decoder) DecodeParallel(data [][]byte) ([]*asterix.DataBlock, error) {
 	}
 
 	// Use parallel decoding
-	results := make([]*asterix.DataBlock, len(data))
+	results := make([]*DataBlock, len(data))
 	errs := make(chan error, 1)
 
 	// Create a worker pool
@@ -277,7 +277,7 @@ func (d *Decoder) DecodeParallel(data [][]byte) ([]*asterix.DataBlock, error) {
 }
 
 // StreamDecode processes a stream of ASTERIX messages and calls the callback for each one
-func (d *Decoder) StreamDecode(r io.Reader, callback func(*asterix.DataBlock) error) error {
+func (d *Decoder) StreamDecode(r io.Reader, callback func(*DataBlock) error) error {
 	d.streamMu.Lock()
 	defer d.streamMu.Unlock()
 
@@ -304,7 +304,7 @@ func (d *Decoder) StreamDecode(r io.Reader, callback func(*asterix.DataBlock) er
 			// Get the message length
 			length := int(d.streamBuffer[offset+1])<<8 | int(d.streamBuffer[offset+2])
 			if length < 3 {
-				return fmt.Errorf("invalid message length %d in stream: %w", length, asterix.ErrInvalidLength)
+				return fmt.Errorf("invalid message length %d in stream: %w", length, ErrInvalidLength)
 			}
 
 			// If we don't have the complete message yet, wait for more data
@@ -343,7 +343,7 @@ func (d *Decoder) ExtractMessages(data []byte) ([][]byte, error) {
 
 	for offset+3 <= len(data) { // Need at least 3 bytes for header
 		// Check if this looks like the start of an ASTERIX message
-		cat := asterix.Category(data[offset])
+		cat := Category(data[offset])
 		if !cat.IsValid() {
 			// Skip this byte and continue searching
 			offset++

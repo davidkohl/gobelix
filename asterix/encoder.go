@@ -1,5 +1,5 @@
 // encoding/encoder.go
-package encoding
+package asterix
 
 import (
 	"bytes"
@@ -7,7 +7,7 @@ import (
 	"io"
 	"sync"
 
-	"github.com/davidkohl/gobelix/asterix"
+	"github.com/davidkohl/gobelix/encoding"
 )
 
 // EncoderOption defines a functional option for configuring the Encoder
@@ -16,16 +16,16 @@ type EncoderOption func(*Encoder)
 // Encoder provides optimized encoding of ASTERIX messages
 type Encoder struct {
 	// Configuration options
-	maxBatchSize int                              // Maximum batch size in bytes
-	parallelism  int                              // Number of parallel encoding goroutines
-	pool         *BufferPool                      // Buffer pool for reusing memory
-	uapCache     map[asterix.Category]asterix.UAP // Cache of UAPs for categories
+	maxBatchSize int                  // Maximum batch size in bytes
+	parallelism  int                  // Number of parallel encoding goroutines
+	pool         *encoding.BufferPool // Buffer pool for reusing memory
+	uapCache     map[Category]UAP     // Cache of UAPs for categories
 
 	// Internal state
-	batchMu       sync.Mutex        // Mutex for batch operations
-	batchCategory asterix.Category  // Category of the current batch
-	batchUAP      asterix.UAP       // UAP of the current batch
-	batchRecords  []*asterix.Record // Records in the current batch
+	batchMu       sync.Mutex // Mutex for batch operations
+	batchCategory Category   // Category of the current batch
+	batchUAP      UAP        // UAP of the current batch
+	batchRecords  []*Record  // Records in the current batch
 }
 
 // DefaultMaxBatchSize is the default maximum batch size in bytes
@@ -53,7 +53,7 @@ func WithParallelism(n int) EncoderOption {
 }
 
 // WithBufferPool sets the buffer pool to use for encoding
-func WithBufferPool(pool *BufferPool) EncoderOption {
+func WithBufferPool(pool *encoding.BufferPool) EncoderOption {
 	return func(e *Encoder) {
 		if pool != nil {
 			e.pool = pool
@@ -66,8 +66,8 @@ func NewEncoder(opts ...EncoderOption) *Encoder {
 	encoder := &Encoder{
 		maxBatchSize: DefaultMaxBatchSize,
 		parallelism:  DefaultParallelism,
-		pool:         defaultBufferPool, // Use the package-level default
-		uapCache:     make(map[asterix.Category]asterix.UAP),
+		pool:         encoding.DefaultBufferPool, // Use the package-level default
+		uapCache:     make(map[Category]UAP),
 	}
 
 	// Apply options
@@ -79,7 +79,7 @@ func NewEncoder(opts ...EncoderOption) *Encoder {
 }
 
 // Encode encodes a DataBlock to bytes
-func (e *Encoder) Encode(dataBlock *asterix.DataBlock) ([]byte, error) {
+func (e *Encoder) Encode(dataBlock *DataBlock) ([]byte, error) {
 	// Estimate size and get buffer from pool
 	estimatedSize := dataBlock.EstimateSize()
 	buf := e.pool.Get(estimatedSize)
@@ -106,7 +106,7 @@ func (e *Encoder) Encode(dataBlock *asterix.DataBlock) ([]byte, error) {
 }
 
 // EncodeTo encodes a DataBlock to an io.Writer
-func (e *Encoder) EncodeTo(dataBlock *asterix.DataBlock, w io.Writer) (int, error) {
+func (e *Encoder) EncodeTo(dataBlock *DataBlock, w io.Writer) (int, error) {
 	// Estimate size and get buffer from pool
 	estimatedSize := dataBlock.EstimateSize()
 	buf := e.pool.Get(estimatedSize)
@@ -129,9 +129,9 @@ func (e *Encoder) EncodeTo(dataBlock *asterix.DataBlock, w io.Writer) (int, erro
 }
 
 // EncodeItems encodes a map of items directly to bytes
-func (e *Encoder) EncodeItems(cat asterix.Category, uap asterix.UAP, items map[string]asterix.DataItem) ([]byte, error) {
+func (e *Encoder) EncodeItems(cat Category, uap UAP, items map[string]DataItem) ([]byte, error) {
 	// Create a data block
-	dataBlock, err := asterix.NewDataBlock(cat, uap)
+	dataBlock, err := NewDataBlock(cat, uap)
 	if err != nil {
 		return nil, fmt.Errorf("creating data block: %w", err)
 	}
@@ -146,9 +146,9 @@ func (e *Encoder) EncodeItems(cat asterix.Category, uap asterix.UAP, items map[s
 }
 
 // EncodeItemsTo encodes a map of items directly to an io.Writer
-func (e *Encoder) EncodeItemsTo(cat asterix.Category, uap asterix.UAP, items map[string]asterix.DataItem, w io.Writer) (int, error) {
+func (e *Encoder) EncodeItemsTo(cat Category, uap UAP, items map[string]DataItem, w io.Writer) (int, error) {
 	// Create a data block
-	dataBlock, err := asterix.NewDataBlock(cat, uap)
+	dataBlock, err := NewDataBlock(cat, uap)
 	if err != nil {
 		return 0, fmt.Errorf("creating data block: %w", err)
 	}
@@ -163,7 +163,7 @@ func (e *Encoder) EncodeItemsTo(cat asterix.Category, uap asterix.UAP, items map
 }
 
 // StartBatch begins a new batch encoding operation
-func (e *Encoder) StartBatch(cat asterix.Category, uap asterix.UAP) {
+func (e *Encoder) StartBatch(cat Category, uap UAP) {
 	e.batchMu.Lock()
 	defer e.batchMu.Unlock()
 
@@ -174,7 +174,7 @@ func (e *Encoder) StartBatch(cat asterix.Category, uap asterix.UAP) {
 }
 
 // AddToBatch adds a map of items to the current batch
-func (e *Encoder) AddToBatch(items map[string]asterix.DataItem) error {
+func (e *Encoder) AddToBatch(items map[string]DataItem) error {
 	e.batchMu.Lock()
 	defer e.batchMu.Unlock()
 
@@ -183,7 +183,7 @@ func (e *Encoder) AddToBatch(items map[string]asterix.DataItem) error {
 	}
 
 	// Create a record
-	record, err := asterix.NewRecord(e.batchCategory, e.batchUAP)
+	record, err := NewRecord(e.batchCategory, e.batchUAP)
 	if err != nil {
 		return fmt.Errorf("creating record: %w", err)
 	}
@@ -215,7 +215,7 @@ func (e *Encoder) FinishBatch() ([]byte, error) {
 	}
 
 	// Create a data block
-	dataBlock, err := asterix.NewDataBlock(e.batchCategory, e.batchUAP)
+	dataBlock, err := NewDataBlock(e.batchCategory, e.batchUAP)
 	if err != nil {
 		return nil, fmt.Errorf("creating data block: %w", err)
 	}
@@ -255,7 +255,7 @@ func (e *Encoder) FinishBatchTo(w io.Writer) (int, error) {
 	}
 
 	// Create a data block
-	dataBlock, err := asterix.NewDataBlock(e.batchCategory, e.batchUAP)
+	dataBlock, err := NewDataBlock(e.batchCategory, e.batchUAP)
 	if err != nil {
 		return 0, fmt.Errorf("creating data block: %w", err)
 	}
@@ -282,7 +282,7 @@ func (e *Encoder) FinishBatchTo(w io.Writer) (int, error) {
 }
 
 // EncodeParallel encodes multiple data blocks in parallel
-func (e *Encoder) EncodeParallel(dataBlocks []*asterix.DataBlock) ([][]byte, error) {
+func (e *Encoder) EncodeParallel(dataBlocks []*DataBlock) ([][]byte, error) {
 	if e.parallelism <= 1 || len(dataBlocks) <= 1 {
 		// Use sequential encoding for small batches or when parallelism is disabled
 		results := make([][]byte, len(dataBlocks))
@@ -340,11 +340,11 @@ func (e *Encoder) EncodeParallel(dataBlocks []*asterix.DataBlock) ([][]byte, err
 }
 
 // EncodeStream encodes items from a channel and writes to an io.Writer
-func (e *Encoder) EncodeStream(cat asterix.Category, uap asterix.UAP,
-	itemsCh <-chan map[string]asterix.DataItem, w io.Writer) error {
+func (e *Encoder) EncodeStream(cat Category, uap UAP,
+	itemsCh <-chan map[string]DataItem, w io.Writer) error {
 
 	// Create a data block
-	dataBlock, err := asterix.NewDataBlock(cat, uap)
+	dataBlock, err := NewDataBlock(cat, uap)
 	if err != nil {
 		return fmt.Errorf("creating data block: %w", err)
 	}
@@ -356,7 +356,7 @@ func (e *Encoder) EncodeStream(cat asterix.Category, uap asterix.UAP,
 	currentSize := 0
 	for items := range itemsCh {
 		// Create a new record for these items
-		record, err := asterix.NewRecord(cat, uap)
+		record, err := NewRecord(cat, uap)
 		if err != nil {
 			return fmt.Errorf("creating record: %w", err)
 		}
