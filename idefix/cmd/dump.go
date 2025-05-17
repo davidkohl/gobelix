@@ -104,7 +104,8 @@ func runDump(cmd *cobra.Command, args []string) error {
 		defer out.Close()
 	}
 
-	// Create decoder with selected UAPs and optimizations
+	// Create decoder with selected UAPs
+	logger.Info("Creating ASTERIX decoder")
 	asterixDecoder, err := decoder.CreateDecoder(decoder.Config{
 		DumpAll:    dumpAll,
 		DumpCat021: dumpCat021,
@@ -123,8 +124,9 @@ func runDump(cmd *cobra.Command, args []string) error {
 
 	reader, err := asxreader.NewAsterixReader(protocol, port, asterixDecoder)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create ASTERIX reader: %w", err)
 	}
+
 	defer reader.Close()
 
 	logger.Info("Listening for ASTERIX messages",
@@ -196,13 +198,13 @@ func processMessages(reader asxreader.AsterixReader, out *os.File, logger *slog.
 		}
 
 		// Update statistics
-		msgStats.IncrementCategory(msg.Category)
+		msgStats.IncrementCategory(msg.Category())
 
 		// Print the message
 		fmt.Fprintln(out, msg)
 
 		logger.Debug("Processed message",
-			"category", msg.Category.String(),
-			"records", msg.GetRecordCount())
+			"category", msg.Category().String(),
+			"records", msg.RecordCount())
 	}
 }

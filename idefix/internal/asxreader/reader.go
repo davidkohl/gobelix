@@ -1,5 +1,5 @@
 // internal/asxreader/reader.go
-package net
+package asxreader
 
 import (
 	"fmt"

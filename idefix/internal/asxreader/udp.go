@@ -1,82 +1,82 @@
 // internal/asxreader/udp.go
-package net
+package asxreader
 
 import (
-	"bytes"
 	"fmt"
 	"net"
-	"os"
 	"sync/atomic"
 	"time"
 
 	"github.com/davidkohl/gobelix/asterix"
-	"github.com/davidkohl/gobelix/encoding"
 )
 
 // udpAsterixReader implements AsterixReader for UDP connections
 type udpAsterixReader struct {
-	conn       net.PacketConn
-	decoder    *encoding.Decoder
-	stats      ReaderStats
-	bufferPool *encoding.BufferPool
-	lastError  error
+	conn      *net.UDPConn
+	decoder   *asterix.Decoder
+	stats     ReaderStats
+	lastError error
 
 	// For atomic access to stats
 	bytesRead       int64
 	messagesRead    int64
-	transportErrors int64
+	transportErrors int32
 }
 
 // NewUDPAsterixReader creates a reader for UDP ASTERIX messages
-func NewUDPAsterixReader(port int, decoder *encoding.Decoder) (AsterixReader, error) {
-	addr := fmt.Sprintf(":%d", port)
-	conn, err := net.ListenPacket("udp", addr)
+func NewUDPAsterixReader(port int, decoder *asterix.Decoder) (AsterixReader, error) {
+	if decoder == nil {
+		return nil, fmt.Errorf("decoder cannot be nil")
+	}
+
+	// Create a specific UDP address to listen on
+	addr, err := net.ResolveUDPAddr("udp", fmt.Sprintf(":%d", port))
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve UDP address: %w", err)
+	}
+
+	// Use ListenUDP directly
+	conn, err := net.ListenUDP("udp", addr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to listen on UDP port %d: %w", port, err)
 	}
 
-	// Create a buffer pool for better memory management
-	pool := encoding.NewBufferPool()
-
 	return &udpAsterixReader{
-		conn:       conn,
-		decoder:    decoder,
-		stats:      NewReaderStats(),
-		bufferPool: pool,
+		conn:    conn,
+		decoder: decoder,
+		stats:   NewReaderStats(),
 	}, nil
 }
 
 // Next reads and decodes the next ASTERIX message from UDP
-func (r *udpAsterixReader) Next() (*asterix.AsterixMessage, error) {
-	// Get a buffer from the pool
-	buf := r.bufferPool.Get(65536) // Max UDP packet size
-	defer r.bufferPool.Put(buf)
-
-	// Set read deadline if needed (e.g., to support timeout)
-	// r.conn.SetReadDeadline(time.Now().Add(readTimeout))
+func (r *udpAsterixReader) Next() (*asterix.DataBlock, error) {
+	// Simple fixed buffer for UDP - no pool required
+	buf := make([]byte, 65536) // Max UDP packet size
 
 	// Read the next packet
-	n, addr, err := r.conn.ReadFrom(buf)
+	n, addr, err := r.conn.ReadFromUDP(buf)
 	if err != nil {
 		r.lastError = err
-		atomic.AddInt64(&r.transportErrors, 1)
+		atomic.AddInt32(&r.transportErrors, 1)
 		return nil, fmt.Errorf("reading UDP packet: %w", err)
+	}
+
+	// Handle empty packet
+	if n == 0 {
+		return nil, fmt.Errorf("received empty UDP packet")
 	}
 
 	// Update stats
 	atomic.AddInt64(&r.bytesRead, int64(n))
 	atomic.AddInt64(&r.messagesRead, 1)
-	r.stats.SourceAddr = addr.String()
+	if addr != nil {
+		r.stats.SourceAddr = addr.String()
+	}
 	r.stats.ConnectionTime = time.Since(r.stats.StartTime)
 
-	// Create a reader from the UDP packet data
-	packetReader := bytes.NewReader(buf[:n])
-
-	// Decode the message
-	msg, err := r.decoder.DecodeFrom(packetReader)
+	// Use Decode instead of DecodeFrom
+	msg, err := r.decoder.Decode(buf[:n])
 	if err != nil {
-		// Log the error but don't return it so we can continue reading
-		fmt.Fprintf(os.Stderr, "Warning: Error decoding ASTERIX message: %v\n", err)
 		return nil, fmt.Errorf("decoding ASTERIX message: %w", err)
 	}
 
@@ -85,7 +85,10 @@ func (r *udpAsterixReader) Next() (*asterix.AsterixMessage, error) {
 
 // Close closes the underlying connection
 func (r *udpAsterixReader) Close() error {
-	return r.conn.Close()
+	if r.conn != nil {
+		return r.conn.Close()
+	}
+	return nil
 }
 
 // Protocol returns the transport protocol name
@@ -95,11 +98,13 @@ func (r *udpAsterixReader) Protocol() string {
 
 // Stats returns reader statistics
 func (r *udpAsterixReader) Stats() ReaderStats {
-	// Create a copy with atomic loads
-	stats := r.stats
-	stats.BytesRead = atomic.LoadInt64(&r.bytesRead)
-	stats.MessagesRead = atomic.LoadInt64(&r.messagesRead)
-	stats.TransportErrors = int(atomic.LoadInt64(&r.transportErrors))
-	stats.ConnectionTime = time.Since(r.stats.StartTime)
-	return stats
+	// Return a copy with atomic loads to avoid race conditions
+	return ReaderStats{
+		BytesRead:       atomic.LoadInt64(&r.bytesRead),
+		MessagesRead:    atomic.LoadInt64(&r.messagesRead),
+		TransportErrors: int(atomic.LoadInt32(&r.transportErrors)),
+		ConnectionTime:  time.Since(r.stats.StartTime),
+		SourceAddr:      r.stats.SourceAddr,
+		StartTime:       r.stats.StartTime,
+	}
 }

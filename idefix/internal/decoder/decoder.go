@@ -22,20 +22,20 @@ type Config struct {
 }
 
 // CreateDecoder creates and configures a decoder with the specified UAPs
-func CreateDecoder(config Config) (*encoding.Decoder, error) {
-	// Create a buffer pool for improved performance
-	pool := encoding.NewBufferPool()
+func CreateDecoder(config Config) (*asterix.Decoder, error) {
+	// Initialize the default buffer pool if it doesn't exist
+	if encoding.DefaultBufferPool == nil {
+		encoding.DefaultBufferPool = encoding.NewBufferPool()
+	}
 
-	// Create a decoder with improved options
-	decoder := encoding.NewDecoder(
-		encoding.WithDecoderBufferPool(pool),
-		encoding.WithDecoderParallelism(2), // Use moderate parallelism
-	)
+	// Create a decoder without any special options
+	// This avoids potential issues with nil buffer pools
+	decoder := asterix.NewDecoder()
 
 	var uaps []asterix.UAP
 
 	if config.DumpAll || config.DumpCat021 {
-		uap021, err := cat021.NewUAP("2.6")
+		uap021, err := cat021.NewUAP(cat021.Version26)
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize Cat021 UAP: %w", err)
 		}
