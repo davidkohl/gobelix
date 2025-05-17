@@ -6,6 +6,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"strings"
+	"time"
 )
 
 // DataBlock represents a complete ASTERIX message
@@ -319,4 +321,60 @@ func (db *DataBlock) Clone() (*DataBlock, error) {
 	}
 
 	return clone, nil
+}
+
+// String returns a human-readable representation of the DataBlock
+func (db *DataBlock) String() string {
+	var sb strings.Builder
+
+	// Calculate size
+	size := db.EstimateSize()
+
+	// Add header with basic information
+	sb.WriteString(fmt.Sprintf("ASTERIX %s Message (%d bytes, %d records)\n",
+		db.category.String(), size, len(db.records)))
+
+	// Add timestamp (current time)
+	sb.WriteString(fmt.Sprintf("Timestamp: %s\n", time.Now().Format(time.RFC3339)))
+
+	// For each record
+	for i, record := range db.records {
+		sb.WriteString(fmt.Sprintf("Record #%d:\n", i+1))
+
+		// Get items in FRN order if UAP available
+		if db.uap != nil {
+			fields := db.uap.Fields()
+
+			// Print data items in FRN order
+			for _, field := range fields {
+				if item, exists := record.GetDataItem(field.DataItem); exists {
+					// Use the item's String method if available
+					var valueStr string
+					if stringer, ok := item.(fmt.Stringer); ok {
+						valueStr = stringer.String()
+					} else {
+						valueStr = fmt.Sprintf("%v", item)
+					}
+
+					sb.WriteString(fmt.Sprintf("  %s (%s): %s\n",
+						field.DataItem, field.Description, valueStr))
+				}
+			}
+		} else {
+			// Fallback if UAP not available - use items directly
+			for id, item := range record.Items() {
+				// Use the item's String method if available
+				var valueStr string
+				if stringer, ok := item.(fmt.Stringer); ok {
+					valueStr = stringer.String()
+				} else {
+					valueStr = fmt.Sprintf("%v", item)
+				}
+
+				sb.WriteString(fmt.Sprintf("  %s: %s\n", id, valueStr))
+			}
+		}
+	}
+
+	return sb.String()
 }

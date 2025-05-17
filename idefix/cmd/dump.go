@@ -2,6 +2,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log/slog"
@@ -126,73 +127,122 @@ func runDump(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create ASTERIX reader: %w", err)
 	}
-
 	defer reader.Close()
 
 	logger.Info("Listening for ASTERIX messages",
 		"protocol", reader.Protocol(),
 		"port", port)
 
+	// Create a context that can be canceled
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	// Handle SIGINT for graceful shutdown
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 
-	// Create timeout channel if timeout is specified
-	var timeoutCh <-chan time.Time
+	// Setup timeout if specified
 	if timeout > 0 {
-		timeoutCh = time.After(time.Duration(timeout) * time.Second)
-	}
-
-	// Create stats ticker if stats are requested
-	var statsTicker *time.Ticker
-	if statsEvery > 0 {
-		statsTicker = time.NewTicker(time.Duration(statsEvery) * time.Second)
-		defer statsTicker.Stop()
+		go func() {
+			select {
+			case <-time.After(time.Duration(timeout) * time.Second):
+				logger.Info("Timeout reached, initiating shutdown", "timeout_seconds", timeout)
+				cancel()
+			case <-ctx.Done():
+				// Context was canceled elsewhere, nothing to do
+				return
+			}
+		}()
 	}
 
 	// Track statistics
 	messageStats := stats.NewMessageStats()
 
-	// Start processing in a goroutine
-	done := make(chan error, 1)
+	// Setup stats reporting if enabled
+	if statsEvery > 0 {
+		go func() {
+			ticker := time.NewTicker(time.Duration(statsEvery) * time.Second)
+			defer ticker.Stop()
+
+			for {
+				select {
+				case <-ticker.C:
+					messageStats.LogStats(logger, false)
+				case <-ctx.Done():
+					return
+				}
+			}
+		}()
+	}
+
+	// Start the message processing in a goroutine
+	processDone := make(chan error, 1)
 	go func() {
-		done <- processMessages(reader, out, logger, messageStats)
+		processDone <- processMessages(ctx, reader, out, logger, messageStats)
 	}()
 
-	// Wait for completion, interrupt, or timeout
-	for {
+	// Wait for signal or processing completion
+	var result error
+	select {
+	case <-sigCh:
+		logger.Info("Received shutdown signal, terminating")
+		cancel()
+		// Wait for processing to finish with a timeout
 		select {
-		case err := <-done:
-			if Verbose {
-				messageStats.LogStats(logger, true)
-			}
-			return err
-		case <-sigCh:
-			logger.Info("Shutting down due to signal")
-			messageStats.LogStats(logger, true)
-			return nil
-		case <-timeoutCh:
-			logger.Info("Shutting down due to timeout", "timeout_seconds", timeout)
-			messageStats.LogStats(logger, true)
-			return nil
-		case <-statsTicker.C:
-			messageStats.LogStats(logger, false)
+		case err := <-processDone:
+			result = err
+		case <-time.After(2 * time.Second):
+			logger.Info("Forced shutdown after timeout")
 		}
+	case err := <-processDone:
+		logger.Info("Message processing completed")
+		result = err
 	}
+
+	// Print final statistics
+	messageStats.LogStats(logger, true)
+	return result
 }
 
-func processMessages(reader asxreader.AsterixReader, out *os.File, logger *slog.Logger, msgStats *stats.MessageStats) error {
+func processMessages(
+	ctx context.Context,
+	reader asxreader.AsterixReader,
+	out *os.File,
+	logger *slog.Logger,
+	msgStats *stats.MessageStats,
+) error {
 	logger.Debug("Starting message processing loop")
 
 	for {
+		// Check for cancellation
+		select {
+		case <-ctx.Done():
+			logger.Info("Message processing canceled")
+			return nil
+		default:
+			// Continue processing
+		}
+
+		// Set a short read timeout to prevent blocking indefinitely on Next()
+		// This is especially important for UDP
+		if setDeadliner, ok := reader.(asxreader.DeadlineSetter); ok {
+			setDeadliner.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+		}
+
 		msg, err := reader.Next()
 		if err != nil {
+			// Check for standard errors
 			if err == io.EOF {
 				logger.Info("Connection closed")
-				return nil // Connection closed normally
+				return nil
 			}
 
-			// Log the error but continue processing
+			// For timeout errors, just continue the loop to check for cancellation
+			if isTimeoutError(err) {
+				continue
+			}
+
+			// Log other errors but keep running
 			logger.Error("Error reading message", "error", err)
 			continue
 		}
@@ -200,11 +250,29 @@ func processMessages(reader asxreader.AsterixReader, out *os.File, logger *slog.
 		// Update statistics
 		msgStats.IncrementCategory(msg.Category())
 
-		// Print the message
-		fmt.Fprintln(out, msg)
+		// Print the message using its String() method
+		fmt.Fprintln(out, msg.String())
 
 		logger.Debug("Processed message",
 			"category", msg.Category().String(),
 			"records", msg.RecordCount())
 	}
+}
+
+// isTimeoutError checks if an error is a timeout error
+func isTimeoutError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	// Check for standard net timeout errors
+	if netErr, ok := err.(interface{ Timeout() bool }); ok && netErr.Timeout() {
+		return true
+	}
+
+	// Check based on error string (less reliable but catches more cases)
+	errStr := err.Error()
+	return strings.Contains(errStr, "timeout") ||
+		strings.Contains(errStr, "i/o timeout") ||
+		strings.Contains(errStr, "deadline exceeded")
 }

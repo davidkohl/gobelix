@@ -40,6 +40,8 @@ func (u *UAP26) CreateDataItem(id string) (asterix.DataItem, error) {
 		return &v26.EmitterCategory{}, nil
 	case "I021/040":
 		return &v26.TargetReportDescriptor{}, nil
+	case "I021/070":
+		return &v26.Mode3ACode{}, nil
 	case "I021/080":
 		return &v26.TargetAddress{}, nil
 	case "I021/090":

@@ -81,5 +81,5 @@ func (a *AirSpeed) String() string {
 	if a.IsMach {
 		return fmt.Sprintf("%.3f Mach", a.Speed)
 	}
-	return fmt.Sprintf("%.1f kts", a.Speed*3600) // Convert NM/s to knots
+	return fmt.Sprintf("%.1f kts", a.Speed)
 }

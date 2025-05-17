@@ -18,6 +18,11 @@ type AsterixReader interface {
 	Stats() ReaderStats
 }
 
+// DeadlineSetter is an interface for readers that support setting read deadlines
+type DeadlineSetter interface {
+	SetReadDeadline(t time.Time) error
+}
+
 // ReaderStats contains statistics about the reader
 type ReaderStats struct {
 	BytesRead       int64

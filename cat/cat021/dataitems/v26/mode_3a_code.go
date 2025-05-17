@@ -36,7 +36,6 @@ func (m *Mode3ACode) Decode(buf *bytes.Buffer) (int, error) {
 	// Convert to octal and format as a 4-digit string
 	m.Code = fmt.Sprintf("%04o", codeValue)
 	m.Valid = true
-
 	return n, m.Validate()
 }
 
@@ -93,7 +92,7 @@ func (m *Mode3ACode) getCodeValue() (uint16, error) {
 
 func (m *Mode3ACode) Validate() error {
 	if m.Code == "" {
-		return fmt.Errorf("Mode 3/A code is empty")
+		return fmt.Errorf("mode 3/A code is empty")
 	}
 
 	// Clean and check the code
@@ -105,7 +104,7 @@ func (m *Mode3ACode) Validate() error {
 	}, m.Code)
 
 	if len(cleanCode) == 0 {
-		return fmt.Errorf("Mode 3/A code contains no valid octal digits")
+		return fmt.Errorf("mode 3/A code contains no valid octal digits")
 	}
 
 	// Parse as octal number to check validity
@@ -116,7 +115,7 @@ func (m *Mode3ACode) Validate() error {
 
 	// The code should fit in 12 bits
 	if code > 0x0FFF {
-		return fmt.Errorf("Mode 3/A code value out of valid range: %d", code)
+		return fmt.Errorf("mode 3/A code value out of valid range: %d", code)
 	}
 
 	return nil

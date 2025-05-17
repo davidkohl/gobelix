@@ -45,6 +45,9 @@ func NewTCPAsterixReader(port int, decoder *asterix.Decoder) (AsterixReader, err
 		return nil, fmt.Errorf("failed to accept TCP connection: %w", err)
 	}
 
+	// Set a default read deadline to prevent blocking indefinitely
+	conn.SetReadDeadline(time.Now().Add(1 * time.Second))
+
 	return &tcpAsterixReader{
 		conn:     conn,
 		listener: listener,
@@ -108,9 +111,17 @@ func (r *tcpAsterixReader) Stats() ReaderStats {
 	return ReaderStats{
 		BytesRead:       atomic.LoadInt64(&r.bytesRead),
 		MessagesRead:    atomic.LoadInt64(&r.messagesRead),
-		ConnectionTime:  r.stats.ConnectionTime,
+		ConnectionTime:  time.Since(r.stats.StartTime),
 		SourceAddr:      r.stats.SourceAddr,
 		TransportErrors: int(atomic.LoadInt32(&r.transportErrors)),
 		StartTime:       r.stats.StartTime,
 	}
+}
+
+// SetReadDeadline sets a deadline for the next read from the TCP connection
+func (r *tcpAsterixReader) SetReadDeadline(t time.Time) error {
+	if r.conn == nil {
+		return fmt.Errorf("nil TCP connection")
+	}
+	return r.conn.SetReadDeadline(t)
 }

@@ -41,6 +41,9 @@ func NewUDPAsterixReader(port int, decoder *asterix.Decoder) (AsterixReader, err
 		return nil, fmt.Errorf("failed to listen on UDP port %d: %w", port, err)
 	}
 
+	// Set initial read deadline to prevent blocking indefinitely
+	conn.SetReadDeadline(time.Now().Add(1 * time.Second))
+
 	return &udpAsterixReader{
 		conn:    conn,
 		decoder: decoder,
@@ -50,6 +53,11 @@ func NewUDPAsterixReader(port int, decoder *asterix.Decoder) (AsterixReader, err
 
 // Next reads and decodes the next ASTERIX message from UDP
 func (r *udpAsterixReader) Next() (*asterix.DataBlock, error) {
+	// Safety check
+	if r.conn == nil {
+		return nil, fmt.Errorf("nil UDP connection")
+	}
+
 	// Simple fixed buffer for UDP - no pool required
 	buf := make([]byte, 65536) // Max UDP packet size
 
@@ -58,6 +66,12 @@ func (r *udpAsterixReader) Next() (*asterix.DataBlock, error) {
 	if err != nil {
 		r.lastError = err
 		atomic.AddInt32(&r.transportErrors, 1)
+
+		// Check if it's a timeout error - this is expected when we have a read deadline
+		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+			return nil, fmt.Errorf("UDP read timeout: %w", err)
+		}
+
 		return nil, fmt.Errorf("reading UDP packet: %w", err)
 	}
 
@@ -74,7 +88,7 @@ func (r *udpAsterixReader) Next() (*asterix.DataBlock, error) {
 	}
 	r.stats.ConnectionTime = time.Since(r.stats.StartTime)
 
-	// Use Decode instead of DecodeFrom
+	// Use Decode instead of DecodeFrom since we already have the complete data
 	msg, err := r.decoder.Decode(buf[:n])
 	if err != nil {
 		return nil, fmt.Errorf("decoding ASTERIX message: %w", err)
@@ -107,4 +121,12 @@ func (r *udpAsterixReader) Stats() ReaderStats {
 		SourceAddr:      r.stats.SourceAddr,
 		StartTime:       r.stats.StartTime,
 	}
+}
+
+// SetReadDeadline sets a deadline for the next ReadFromUDP call
+func (r *udpAsterixReader) SetReadDeadline(t time.Time) error {
+	if r.conn == nil {
+		return fmt.Errorf("nil UDP connection")
+	}
+	return r.conn.SetReadDeadline(t)
 }
