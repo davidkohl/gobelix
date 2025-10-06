@@ -3,6 +3,7 @@ package asterix
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"reflect"
 	"testing"
@@ -125,8 +126,8 @@ func TestFSPECEncodeDecode(t *testing.T) {
 			}
 
 			// Verify both FSPECs are identical
-			if !reflect.DeepEqual(f1.data[:f1.size], f2.data[:f2.size]) {
-				t.Errorf("Decoded data %v, want %v", f2.data[:f2.size], f1.data[:f1.size])
+			if !reflect.DeepEqual(f1.data(), f2.data()) {
+				t.Errorf("Decoded data %v, want %v", f2.data(), f1.data())
 			}
 
 			// Verify each FRN that was set is still set
@@ -173,11 +174,17 @@ func TestFSPECDecodeInvalid(t *testing.T) {
 
 			// Check error type
 			if len(tc.input) == 0 {
-				if err != io.EOF {
-					t.Errorf("Expected io.EOF, got %v", err)
+				if !errors.Is(err, io.EOF) {
+					t.Errorf("Expected io.EOF (wrapped or unwrapped), got %v", err)
 				}
-			} else if tc.expectFX && tc.input[0]&0x01 != 0 {
-				// Should get an unexpected EOF or similar for FX extension
+			} else if tc.input[0]&0x01 != 0 && len(tc.input) == 1 {
+				// EOF on extension byte - should get EOF error
+				if !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
+					t.Errorf("Expected EOF-related error for FX extension, got %v", err)
+				}
+			} else if len(tc.input) > 7 {
+				// Too many extensions - should get specific error (not EOF)
+				// Just verify we got an error, which we already checked above
 			}
 		})
 	}
@@ -214,8 +221,8 @@ func TestFSPECByteOperations(t *testing.T) {
 	}
 
 	// Verify both FSPECs are identical
-	if !reflect.DeepEqual(f1.data[:f1.size], f2.data[:f2.size]) {
-		t.Errorf("Decoded data %v, want %v", f2.data[:f2.size], f1.data[:f1.size])
+	if !reflect.DeepEqual(f1.data(), f2.data()) {
+		t.Errorf("Decoded data %v, want %v", f2.data(), f1.data())
 	}
 
 	// Test buffer too small
@@ -277,8 +284,8 @@ func TestFSPECCopy(t *testing.T) {
 	}
 
 	// Should have same data
-	if !reflect.DeepEqual(original.data[:original.size], copy.data[:copy.size]) {
-		t.Errorf("Copy data %v, want %v", copy.data[:copy.size], original.data[:original.size])
+	if !reflect.DeepEqual(original.data(), copy.data()) {
+		t.Errorf("Copy data %v, want %v", copy.data(), original.data())
 	}
 
 	// Check all bits match

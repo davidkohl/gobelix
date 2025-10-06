@@ -3,6 +3,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -13,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/davidkohl/gobelix/asterix"
 	"github.com/davidkohl/gobelix/idefix/internal/asxreader"
 	"github.com/davidkohl/gobelix/idefix/internal/decoder"
 	"github.com/davidkohl/gobelix/idefix/internal/stats"
@@ -23,7 +25,10 @@ var (
 	portFlag   string
 	outputFile string
 	dumpAll    bool
+	dumpCat001 bool
+	dumpCat002 bool
 	dumpCat021 bool
+	dumpCat034 bool
 	dumpCat048 bool
 	dumpCat062 bool
 	dumpCat063 bool
@@ -61,10 +66,13 @@ information in a human-readable format.`,
 
 	// Add category flags
 	dumpCmd.Flags().BoolVar(&dumpAll, "dumpAll", false, "Dump all ASTERIX categories")
-	dumpCmd.Flags().BoolVar(&dumpCat021, "dump021", false, "Dump ASTERIX category 021")
-	dumpCmd.Flags().BoolVar(&dumpCat048, "dump048", false, "Dump ASTERIX category 048")
-	dumpCmd.Flags().BoolVar(&dumpCat062, "dump062", false, "Dump ASTERIX category 062")
-	dumpCmd.Flags().BoolVar(&dumpCat063, "dump063", false, "Dump ASTERIX category 063")
+	dumpCmd.Flags().BoolVar(&dumpCat001, "dump001", false, "Dump ASTERIX category 001 (Monoradar Track)")
+	dumpCmd.Flags().BoolVar(&dumpCat002, "dump002", false, "Dump ASTERIX category 002 (Monoradar Plot)")
+	dumpCmd.Flags().BoolVar(&dumpCat021, "dump021", false, "Dump ASTERIX category 021 (ADS-B)")
+	dumpCmd.Flags().BoolVar(&dumpCat034, "dump034", false, "Dump ASTERIX category 034 (Service Messages)")
+	dumpCmd.Flags().BoolVar(&dumpCat048, "dump048", false, "Dump ASTERIX category 048 (Monoradar Target)")
+	dumpCmd.Flags().BoolVar(&dumpCat062, "dump062", false, "Dump ASTERIX category 062 (Track)")
+	dumpCmd.Flags().BoolVar(&dumpCat063, "dump063", false, "Dump ASTERIX category 063 (Sensor Status)")
 
 	// Add additional flags
 	dumpCmd.Flags().IntVar(&timeout, "timeout", 0, "Timeout in seconds (0 = no timeout)")
@@ -109,7 +117,10 @@ func runDump(cmd *cobra.Command, args []string) error {
 	logger.Info("Creating ASTERIX decoder")
 	asterixDecoder, err := decoder.CreateDecoder(decoder.Config{
 		DumpAll:    dumpAll,
+		DumpCat001: dumpCat001,
+		DumpCat002: dumpCat002,
 		DumpCat021: dumpCat021,
+		DumpCat034: dumpCat034,
 		DumpCat048: dumpCat048,
 		DumpCat062: dumpCat062,
 		DumpCat063: dumpCat063,
@@ -178,7 +189,7 @@ func runDump(cmd *cobra.Command, args []string) error {
 	// Start the message processing in a goroutine
 	processDone := make(chan error, 1)
 	go func() {
-		processDone <- processMessages(ctx, reader, out, logger, messageStats)
+		processDone <- processMessages(ctx, reader, out, logger, messageStats, dumpAll)
 	}()
 
 	// Wait for signal or processing completion
@@ -210,6 +221,7 @@ func processMessages(
 	out *os.File,
 	logger *slog.Logger,
 	msgStats *stats.MessageStats,
+	dumpAll bool,
 ) error {
 	logger.Debug("Starting message processing loop")
 
@@ -242,6 +254,11 @@ func processMessages(
 				continue
 			}
 
+			// Suppress unknown category errors unless dumpAll is enabled or verbose logging
+			if shouldSuppressError(err, dumpAll, Verbose) {
+				continue
+			}
+
 			// Log other errors but keep running
 			logger.Error("Error reading message", "error", err)
 			continue
@@ -257,6 +274,25 @@ func processMessages(
 			"category", msg.Category().String(),
 			"records", msg.RecordCount())
 	}
+}
+
+// shouldSuppressError determines if an error should be suppressed based on context
+func shouldSuppressError(err error, dumpAll bool, verbose bool) bool {
+	if err == nil {
+		return false
+	}
+
+	// Never suppress errors if dumpAll is enabled or verbose logging is on
+	if dumpAll || verbose {
+		return false
+	}
+
+	// Suppress unknown category errors when specific categories are selected
+	if errors.Is(err, asterix.ErrUAPNotDefined) || errors.Is(err, asterix.ErrUnknownCategory) {
+		return true
+	}
+
+	return false
 }
 
 // isTimeoutError checks if an error is a timeout error

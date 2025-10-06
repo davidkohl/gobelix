@@ -7,6 +7,10 @@ import (
 
 // BufferPool provides reusable byte slices to reduce memory allocations.
 // Different pools are used for different sizes to avoid wasting memory.
+//
+// Thread Safety: BufferPool is safe for concurrent use by multiple goroutines.
+// All methods (Get, Put, GetWithSize, GetExact) can be called concurrently.
+// The underlying sync.Pool handles all necessary synchronization.
 type BufferPool struct {
 	small  sync.Pool // For buffers up to 64 bytes
 	medium sync.Pool // For buffers up to 1024 bytes
@@ -81,21 +85,27 @@ func (p *BufferPool) Put(buf []byte) {
 		return
 	}
 
-	// Return to the appropriate pool based on capacity
-	switch cap(buf) {
-	case 0:
+	// Return to the appropriate pool based on capacity range
+	capacity := cap(buf)
+
+	if capacity == 0 {
 		// Don't store empty buffers
 		return
-	case smallBufferSize:
-		p.small.Put(&buf)
-	case mediumBufferSize:
-		p.medium.Put(&buf)
-	case largeBufferSize:
-		p.large.Put(&buf)
-	default:
-		// Don't keep non-standard sized buffers
-		// They'll be garbage collected
 	}
+
+	// Use capacity ranges to maximize pool reuse
+	if capacity <= smallBufferSize {
+		// Reset the buffer to the standard small size if needed
+		if capacity < smallBufferSize {
+			buf = buf[:cap(buf)]
+		}
+		p.small.Put(&buf)
+	} else if capacity <= mediumBufferSize {
+		p.medium.Put(&buf)
+	} else if capacity <= largeBufferSize {
+		p.large.Put(&buf)
+	}
+	// Buffers larger than largeBufferSize are not pooled and will be GC'd
 }
 
 // GetWithSize retrieves a buffer with the specified capacity and pre-sets its length

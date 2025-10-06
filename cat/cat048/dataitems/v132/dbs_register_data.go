@@ -138,10 +138,56 @@ func (b *BDSRegisterData) String() string {
 			// Comm-B broadcast
 			result += fmt.Sprintf("\n  #%d: Comm-B Broadcast", i+1)
 		} else {
-			result += fmt.Sprintf("\n  #%d: BDS %X,%X", i+1, register.BDS1, register.BDS2)
+			// Try to decode known BDS registers
+			decoded := ""
+			switch {
+			case register.BDS1 == 4 && register.BDS2 == 0:
+				if data, err := DecodeBDS40(register.Data); err == nil {
+					decoded = "\n  " + indentString(data.String(), "  ")
+				}
+			case register.BDS1 == 5 && register.BDS2 == 0:
+				if data, err := DecodeBDS50(register.Data); err == nil {
+					decoded = "\n  " + indentString(data.String(), "  ")
+				}
+			case register.BDS1 == 6 && register.BDS2 == 0:
+				if data, err := DecodeBDS60(register.Data); err == nil {
+					decoded = "\n  " + indentString(data.String(), "  ")
+				}
+			}
+
+			if decoded != "" {
+				result += decoded
+			} else {
+				result += fmt.Sprintf("\n  #%d: BDS %X,%X (raw data)", i+1, register.BDS1, register.BDS2)
+			}
 		}
 	}
 
+	return result
+}
+
+// indentString adds indentation to all lines in a string
+func indentString(s string, indent string) string {
+	lines := []string{}
+	current := ""
+	for i, c := range s {
+		if c == '\n' {
+			lines = append(lines, indent+current)
+			current = ""
+		} else {
+			current += string(c)
+		}
+		if i == len(s)-1 && current != "" {
+			lines = append(lines, indent+current)
+		}
+	}
+	result := ""
+	for i, line := range lines {
+		result += line
+		if i < len(lines)-1 {
+			result += "\n"
+		}
+	}
 	return result
 }
 

@@ -13,7 +13,18 @@ import (
 // EncoderOption defines a functional option for configuring the Encoder
 type EncoderOption func(*Encoder)
 
-// Encoder provides optimized encoding of ASTERIX messages
+// Encoder provides optimized encoding of ASTERIX messages.
+//
+// Thread Safety:
+//   - Encode, EncodeTo, EncodeItems, EncodeItemsTo: Safe for concurrent use
+//   - EncodeParallel, EncodeStream: Safe for concurrent use
+//   - Batch operations (StartBatch, AddToBatch, FinishBatch, FinishBatchTo):
+//     NOT safe for concurrent use. The encoder maintains batch state that is
+//     protected by batchMu, but batch operations should be serialized per
+//     encoder instance. For concurrent batch encoding, create multiple encoder
+//     instances.
+//
+// The encoder maintains internal buffer pool which is safe for concurrent access.
 type Encoder struct {
 	// Configuration options
 	maxBatchSize int                  // Maximum batch size in bytes
@@ -79,30 +90,28 @@ func NewEncoder(opts ...EncoderOption) *Encoder {
 }
 
 // Encode encodes a DataBlock to bytes
+// The returned byte slice is a fresh allocation and safe to use/modify.
 func (e *Encoder) Encode(dataBlock *DataBlock) ([]byte, error) {
-	// Estimate size and get buffer from pool
+	// Get buffer from pool
 	estimatedSize := dataBlock.EstimateSize()
-	buf := e.pool.Get(estimatedSize)
+	poolBuf := e.pool.Get(estimatedSize)
+	defer e.pool.Put(poolBuf)
+
+	// Create a bytes.Buffer wrapper around the pooled slice
+	buf := bytes.NewBuffer(poolBuf[:0])
 
 	// Encode to buffer
-	_, err := dataBlock.EncodeWithBuffer(bytes.NewBuffer(buf[:0]))
+	_, err := dataBlock.EncodeWithBuffer(buf)
 	if err != nil {
-		e.pool.Put(buf)
 		return nil, fmt.Errorf("encoding data block: %w", err)
 	}
 
-	// Get the resulting data
-	result := buf[:len(buf)]
+	// Copy to a fresh allocation for the caller
+	// (pool buffer will be returned and reused)
+	result := make([]byte, buf.Len())
+	copy(result, buf.Bytes())
 
-	// Create a copy to return to the caller
-	// This is necessary because we'll return the buffer to the pool
-	data := make([]byte, len(result))
-	copy(data, result)
-
-	// Return buffer to pool
-	e.pool.Put(buf)
-
-	return data, nil
+	return result, nil
 }
 
 // EncodeTo encodes a DataBlock to an io.Writer

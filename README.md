@@ -15,7 +15,7 @@ Gobelix is a high-performance Go library for encoding and decoding ASTERIX (All-
 
 ## ⚠️ Preamble
 
-This package was created using Claude 3.7 Sonnet 🤖🤝👨🏻. It it currently a passion project and there is currently no guarantees for the correctness. Use at your own disgression. 
+This package was created using Claude Sonnet 4.5 🤖🤝👨🏻. It is currently a passion project and there are no guarantees for correctness. Use at your own discretion. 
 
 ## 🚀 Installation
 
@@ -36,10 +36,10 @@ ASTERIX (All-purpose STructured Eurocontrol SurveIllance Information EXchange) i
 
 ```go
 // Creating UAPs for different categories
-uap021, _ := cat021.NewUAP("2.6")
-uap048, _ := cat048.NewUAP("1.6") 
-uap062, _ := cat062.NewUAP("1.20")
-uap063, _ := cat063.NewUAP("1.6")
+uap021, _ := cat021.NewUAP(cat021.Version26)
+uap048, _ := cat048.NewUAP(cat048.Version132)
+uap062, _ := cat062.NewUAP(cat062.Version120)
+uap063, _ := cat063.NewUAP(cat063.Version16)
 ```
 
 #### Message Structure
@@ -137,28 +137,25 @@ import (
 
 func main() {
 	// Create UAPs for the categories we want to decode
-	uap021, _ := cat021.NewUAP("2.6")
-	uap048, _ := cat048.NewUAP("1.6")
-	uap062, _ := cat062.NewUAP("1.20")
-	uap063, _ := cat063.NewUAP("1.6")
-	
+	uap021, _ := cat021.NewUAP(cat021.Version26)
+	uap048, _ := cat048.NewUAP(cat048.Version132)
+	uap062, _ := cat062.NewUAP(cat062.Version120)
+	uap063, _ := cat063.NewUAP(cat063.Version16)
+
 	// Create a decoder with the configured UAPs
-	decoder, err := asterix.NewDecoder(uap021, uap048, uap062, uap063)
+	decoder := asterix.NewDecoder(
+		asterix.WithPreloadedUAPs(uap021, uap048, uap062, uap063),
+	)
+	
+	// Read ASTERIX data from file
+	data, err := os.ReadFile("surveillance_data.bin")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to create decoder: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Failed to read file: %v\n", err)
 		os.Exit(1)
 	}
-	
-	// Open a file with ASTERIX data
-	file, err := os.Open("surveillance_data.bin")
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to open file: %v\n", err)
-		os.Exit(1)
-	}
-	defer file.Close()
-	
+
 	// Decode the message
-	msg, err := decoder.Decode(file)
+	msg, err := decoder.Decode(data)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to decode: %v\n", err)
 		os.Exit(1)
@@ -166,24 +163,21 @@ func main() {
 	
 	// Process the decoded data
 	fmt.Printf("Decoded ASTERIX message:\n")
-	fmt.Printf("  Category: %s\n", msg.Category)
-	fmt.Printf("  Records: %d\n", msg.GetRecordCount())
-	
-	// Access data from the first record
-	if msg.GetRecordCount() > 0 {
-		// For ADS-B messages (Category 021)
-		if msg.Category == asterix.Cat021 {
-			for i := 0; i < msg.GetRecordCount(); i++ {
-				if dataSourceItem, _, exists := msg.GetDataItemFromRecord("I021/010", i); exists {
-					dsi := dataSourceItem.(*common.DataSourceIdentifier)
-					fmt.Printf("  Data Source: SAC=%d, SIC=%d\n", dsi.SAC, dsi.SIC)
-				}
-				
-				if positionItem, _, exists := msg.GetDataItemFromRecord("I021/130", i); exists {
-					pos := positionItem.(*common.Position)
-					fmt.Printf("  Position: Lat=%.6f°, Lon=%.6f°\n", pos.Latitude, pos.Longitude)
-				}
-			}
+	fmt.Printf("  Category: %s\n", msg.Category())
+	fmt.Printf("  Records: %d\n", msg.RecordCount())
+
+	// Access data from records
+	for _, record := range msg.Records() {
+		// Get Data Source Identifier (present in all categories)
+		if dsi, exists := record.GetDataItem("I021/010"); exists {
+			dataSource := dsi.(*common.DataSourceIdentifier)
+			fmt.Printf("  Data Source: SAC=%d, SIC=%d\n", dataSource.SAC, dataSource.SIC)
+		}
+
+		// Get position (if present in Cat021)
+		if pos, exists := record.GetDataItem("I021/130"); exists {
+			position := pos.(*common.PositionWGS84)
+			fmt.Printf("  Position: Lat=%.6f°, Lon=%.6f°\n", position.Latitude, position.Longitude)
 		}
 	}
 }
@@ -206,7 +200,7 @@ import (
 
 func main() {
 	// Create a UAP for Category 021
-	uap, err := cat021.NewUAP("2.6")
+	uap, err := cat021.NewUAP(cat021.Version26)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to create UAP: %v\n", err)
 		os.Exit(1)
@@ -234,7 +228,7 @@ func main() {
 	record.SetDataItem("I021/080", &v26.TargetAddress{Address: 0xABC123})
 	
 	// Add position (latitude/longitude)
-	record.SetDataItem("I021/130", &common.Position{
+	record.SetDataItem("I021/130", &common.PositionWGS84{
 		Latitude:  51.5074, // London
 		Longitude: -0.1278,
 	})
@@ -299,16 +293,18 @@ Gobelix provides high-level encoders and decoders that handle the complexities o
 
 ```go
 // Creating a decoder with multiple category support
-decoder, _ := asterix.NewDecoder(uap021, uap048, uap062, uap063)
+decoder := asterix.NewDecoder(
+	asterix.WithPreloadedUAPs(uap021, uap048, uap062, uap063),
+)
 
-// Decoding from any io.Reader
-message, _ := decoder.Decode(networkStream)
+// Decoding from byte slice
+message, _ := decoder.Decode(data)
 
 // Creating an encoder
-encoder, _ := asterix.NewEncoder(uap021, uap062)
+encoder := asterix.NewEncoder()
 
-// Encoding to any io.Writer
-encoder.Encode(outputFile, message)
+// Encoding to bytes
+encodedData, _ := encoder.Encode(dataBlock)
 ```
 
 ### 2. Message Validation

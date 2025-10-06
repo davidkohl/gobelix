@@ -25,7 +25,7 @@ func TestSensorConfigurationAndStatus_EncodeDecode(t *testing.T) {
 				MLT:            true,
 				HasFirstExtent: false,
 			},
-			expected: []byte{0x28}, // 00101000
+			expected: []byte{0x2A}, // 00101010 - bit 1 (MLT) is set
 		},
 		{
 			name: "First part and first extent",
@@ -44,7 +44,7 @@ func TestSensorConfigurationAndStatus_EncodeDecode(t *testing.T) {
 				TSV:            true,
 				NPW:            false,
 			},
-			expected: []byte{0x45, 0xA8}, // 01000101, 10101000
+			expected: []byte{0x55, 0xA8}, // 01010101, 10101000 - SSR (bit 4) and ADS (bit 2) set
 		},
 		{
 			name: "Status not connected with all NOGO and all warnings",
@@ -63,7 +63,7 @@ func TestSensorConfigurationAndStatus_EncodeDecode(t *testing.T) {
 				TSV:            true,
 				NPW:            true,
 			},
-			expected: []byte{0xBF, 0xFC}, // 10111111, 11111100
+			expected: []byte{0xFF, 0xFC}, // 11111111, 11111100 - CON=3 sets bits 7-6 to 11
 		},
 	}
 

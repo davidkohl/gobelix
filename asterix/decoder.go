@@ -12,10 +12,21 @@ import (
 // DecoderOption defines a functional option for configuring the Decoder
 type DecoderOption func(*Decoder)
 
-// Decoder provides optimized decoding of ASTERIX messages
+// Decoder provides optimized decoding of ASTERIX messages.
+//
+// Thread Safety:
+//   - Decode, DecodeFrom, DecodeAll, DecodeParallel: Safe for concurrent use
+//   - RegisterUAP, GetUAP: Safe for concurrent use
+//   - StreamDecode: NOT safe for concurrent calls on the same decoder instance
+//     (uses internal state via streamMu and streamBuffer). Create separate
+//     decoder instances for concurrent stream decoding.
+//   - ExtractMessages, ResetStream: Thread-safe
+//
+// The decoder maintains internal UAP cache and buffer pool which are safe
+// for concurrent access.
 type Decoder struct {
 	// Configuration options
-	parallelism int                  // Number of parallel decoding ∏
+	parallelism int                  // Number of parallel decoding goroutines
 	pool        *encoding.BufferPool // Buffer pool for reusing memory
 	uapCache    map[Category]UAP     // Cache of UAPs for categories
 
@@ -83,7 +94,8 @@ func (d *Decoder) GetUAP(category Category) UAP {
 	return d.uapCache[category]
 }
 
-// Decode parses an ASTERIX data block from bytes
+// Decode parses an ASTERIX data block from bytes.
+// Returns nil, error for unknown/invalid categories (caller should skip/log).
 func (d *Decoder) Decode(data []byte) (*DataBlock, error) {
 	if len(data) < 3 {
 		return nil, fmt.Errorf("data too short for ASTERIX message: %w", ErrInvalidMessage)
@@ -92,12 +104,14 @@ func (d *Decoder) Decode(data []byte) (*DataBlock, error) {
 	// Extract category from data
 	cat := Category(data[0])
 	if !cat.IsValid() {
+		// Return error for invalid category - caller should skip this message
 		return nil, fmt.Errorf("invalid ASTERIX category %d: %w", cat, ErrInvalidCategory)
 	}
 
 	// Get the UAP for this category
 	uap := d.uapCache[cat]
 	if uap == nil {
+		// Return error for unknown category - caller should skip this message
 		return nil, fmt.Errorf("no UAP registered for category %d: %w", cat, ErrUAPNotDefined)
 	}
 
@@ -125,22 +139,35 @@ func (d *Decoder) DecodeFrom(r io.Reader) (*DataBlock, error) {
 		return nil, fmt.Errorf("reading header: %w", err)
 	}
 
+	// Get the message length first (so we can skip invalid messages)
+	length := int(header[1])<<8 | int(header[2])
+	if length < 3 {
+		return nil, fmt.Errorf("invalid message length %d: %w", length, ErrInvalidLength)
+	}
+
 	// Check if the category is valid
 	cat := Category(header[0])
 	if !cat.IsValid() {
+		// Skip the message body to maintain stream synchronization
+		skipBuf := d.pool.GetWithSize(length - 3)
+		defer d.pool.Put(skipBuf)
+		if _, err := io.ReadFull(r, skipBuf); err != nil {
+			return nil, fmt.Errorf("skipping invalid category %d message: %w", cat, err)
+		}
 		return nil, fmt.Errorf("invalid ASTERIX category %d: %w", cat, ErrInvalidCategory)
 	}
 
 	// Get the UAP for this category
 	uap := d.uapCache[cat]
 	if uap == nil {
+		// Skip the message body to maintain stream synchronization
+		// We already read the 3-byte header, so skip length-3 bytes
+		skipBuf := d.pool.GetWithSize(length - 3)
+		defer d.pool.Put(skipBuf)
+		if _, err := io.ReadFull(r, skipBuf); err != nil {
+			return nil, fmt.Errorf("skipping unknown category %d message: %w", cat, err)
+		}
 		return nil, fmt.Errorf("no UAP registered for category %d: %w", cat, ErrUAPNotDefined)
-	}
-
-	// Get the message length
-	length := int(header[1])<<8 | int(header[2])
-	if length < 3 {
-		return nil, fmt.Errorf("invalid message length %d: %w", length, ErrInvalidLength)
 	}
 
 	// Allocate a buffer for the full message
@@ -205,23 +232,31 @@ func (d *Decoder) DecodeAll(data []byte) ([]*DataBlock, error) {
 }
 
 // DecodeParallel decodes multiple ASTERIX data blocks in parallel
+// Returns partial results even if some messages fail to decode (those will be nil)
+// Returns an error if any message fails, but continues decoding others
 func (d *Decoder) DecodeParallel(data [][]byte) ([]*DataBlock, error) {
 	if d.parallelism <= 1 || len(data) <= 1 {
 		// Use sequential decoding for small batches or when parallelism is disabled
 		results := make([]*DataBlock, len(data))
+		var firstErr error
 		for i, msgData := range data {
 			block, err := d.Decode(msgData)
 			if err != nil {
-				return results, fmt.Errorf("decoding message %d: %w", i, err)
+				if firstErr == nil {
+					firstErr = fmt.Errorf("decoding message %d: %w", i, err)
+				}
+				results[i] = nil // Leave as nil for failed message
+				continue
 			}
 			results[i] = block
 		}
-		return results, nil
+		return results, firstErr
 	}
 
 	// Use parallel decoding
 	results := make([]*DataBlock, len(data))
-	errs := make(chan error, 1)
+	var errMu sync.Mutex
+	var firstErr error
 
 	// Create a worker pool
 	var wg sync.WaitGroup
@@ -236,47 +271,33 @@ func (d *Decoder) DecodeParallel(data [][]byte) ([]*DataBlock, error) {
 			for idx := range workCh {
 				block, err := d.Decode(data[idx])
 				if err != nil {
-					select {
-					case errs <- fmt.Errorf("decoding message %d: %w", idx, err):
-					default:
-						// Channel already has an error, don't block
+					errMu.Lock()
+					if firstErr == nil {
+						firstErr = fmt.Errorf("decoding message %d: %w", idx, err)
 					}
-					return
+					errMu.Unlock()
+					results[idx] = nil // Leave as nil for failed message
+					continue
 				}
 				results[idx] = block
 			}
 		}()
 	}
 
-	// Send work to workers
+	// Send all work to workers
 	for i := range data {
-		select {
-		case err := <-errs:
-			// One of the workers encountered an error
-			close(workCh) // Stop sending more work
-			wg.Wait()     // Wait for all workers to finish
-			return results, err
-		case workCh <- i:
-			// Work sent successfully
-		}
+		workCh <- i
 	}
 
 	close(workCh)
 	wg.Wait()
-	close(errs)
 
-	// Check for errors
-	select {
-	case err := <-errs:
-		return results, err
-	default:
-		// No errors
-	}
-
-	return results, nil
+	return results, firstErr
 }
 
 // StreamDecode processes a stream of ASTERIX messages and calls the callback for each one
+// Note: The stream buffer is NOT automatically reset. Call ResetStream() before reusing the decoder
+// for a new stream if you want to ensure a clean state.
 func (d *Decoder) StreamDecode(r io.Reader, callback func(*DataBlock) error) error {
 	d.streamMu.Lock()
 	defer d.streamMu.Unlock()

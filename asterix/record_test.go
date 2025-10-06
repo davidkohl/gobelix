@@ -228,17 +228,27 @@ func TestRecordEncodeErrors(t *testing.T) {
 	}
 
 	// Item marked in FSPEC but not present
-	// First add the item and set the FSPEC
+	// First ensure all mandatory fields are present
 	err = record.SetDataItem("I021/010", &MockDataItem{id: "I021/010", data: []byte{0xAA, 0xBB}, fixedLen: 2})
+	if err != nil {
+		t.Fatalf("Failed to set mandatory item 010: %v", err)
+	}
+	err = record.SetDataItem("I021/040", &MockDataItem{id: "I021/040", data: []byte{0xCC}, fixedLen: 1})
+	if err != nil {
+		t.Fatalf("Failed to set mandatory item 040: %v", err)
+	}
+	// Add a non-mandatory field
+	err = record.SetDataItem("I021/030", &MockDataItem{id: "I021/030", data: []byte{0xAA, 0xBB, 0xCC}, fixedLen: 3})
 	if err != nil {
 		t.Fatalf("Failed to set data item: %v", err)
 	}
-	// Then remove the item but leave the FSPEC bit set
-	delete(record.items, "I021/010")
+	// Then remove the non-mandatory item but leave the FSPEC bit set
+	delete(record.items, "I021/030")
 	_, err = record.Encode(buf)
 	if err == nil {
 		t.Error("Encode should fail with item in FSPEC but not present")
 	}
+	// This should be an encoding error (FSPEC mismatch), not a validation error
 	if !IsEncodingError(err) {
 		t.Errorf("Error should be encoding error, got: %v", err)
 	}

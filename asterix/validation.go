@@ -254,9 +254,23 @@ func ValidateCallsign(name string, callsign string) error {
 }
 
 // ValidateFieldPresence checks if all required fields are present
-func ValidateFieldPresence(fields map[string]bool) error {
-	for field, required := range fields {
-		if required && !fields[field] {
+// DEPRECATED: This function has a design flaw. Use ValidateRequiredFields instead.
+// The map should contain ONLY required fields as keys, with true=present, false=missing
+func ValidateFieldPresence(requiredFields map[string]bool) error {
+	for field, present := range requiredFields {
+		if !present {
+			return fmt.Errorf("%w: %s", ErrMandatoryField, field)
+		}
+	}
+	return nil
+}
+
+// ValidateRequiredFields checks if all fields in the required list are present
+// requiredFields: list of field names that must be present
+// presentFields: map of field name -> presence status
+func ValidateRequiredFields(requiredFields []string, presentFields map[string]bool) error {
+	for _, field := range requiredFields {
+		if !presentFields[field] {
 			return fmt.Errorf("%w: %s", ErrMandatoryField, field)
 		}
 	}

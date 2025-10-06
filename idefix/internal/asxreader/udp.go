@@ -21,6 +21,9 @@ type udpAsterixReader struct {
 	bytesRead       int64
 	messagesRead    int64
 	transportErrors int32
+
+	// Buffer for handling multiple messages per packet
+	pendingMessages []*asterix.DataBlock
 }
 
 // NewUDPAsterixReader creates a reader for UDP ASTERIX messages
@@ -58,6 +61,13 @@ func (r *udpAsterixReader) Next() (*asterix.DataBlock, error) {
 		return nil, fmt.Errorf("nil UDP connection")
 	}
 
+	// If we have pending messages from a previous packet, return the next one
+	if len(r.pendingMessages) > 0 {
+		msg := r.pendingMessages[0]
+		r.pendingMessages = r.pendingMessages[1:]
+		return msg, nil
+	}
+
 	// Simple fixed buffer for UDP - no pool required
 	buf := make([]byte, 65536) // Max UDP packet size
 
@@ -82,19 +92,68 @@ func (r *udpAsterixReader) Next() (*asterix.DataBlock, error) {
 
 	// Update stats
 	atomic.AddInt64(&r.bytesRead, int64(n))
-	atomic.AddInt64(&r.messagesRead, 1)
 	if addr != nil {
 		r.stats.SourceAddr = addr.String()
 	}
 	r.stats.ConnectionTime = time.Since(r.stats.StartTime)
 
-	// Use Decode instead of DecodeFrom since we already have the complete data
-	msg, err := r.decoder.Decode(buf[:n])
-	if err != nil {
-		return nil, fmt.Errorf("decoding ASTERIX message: %w", err)
+	// Parse all messages from the packet
+	data := buf[:n]
+	offset := 0
+	var messages []*asterix.DataBlock
+
+	for offset < len(data) {
+		// Need at least 3 bytes for header
+		if len(data)-offset < 3 {
+			break
+		}
+
+		// Read the length of the next message
+		msgLength := int(data[offset+1])<<8 | int(data[offset+2])
+		if msgLength < 3 {
+			// Invalid message length, skip this malformed message
+			break
+		}
+
+		// Check if we have enough data for the complete message
+		if offset+msgLength > len(data) {
+			// Incomplete message, skip
+			break
+		}
+
+		// Extract the message data
+		msgData := data[offset : offset+msgLength]
+
+		// Decode the message
+		msg, err := r.decoder.Decode(msgData)
+		if err != nil {
+			// Skip this message and continue with the next one
+			// Return the error only if this is the first message and we have no other messages
+			if len(messages) == 0 && offset == 0 {
+				return nil, fmt.Errorf("decoding ASTERIX message: %w", err)
+			}
+			// Otherwise, just skip this message and continue
+			offset += msgLength
+			continue
+		}
+
+		messages = append(messages, msg)
+		atomic.AddInt64(&r.messagesRead, 1)
+		offset += msgLength
 	}
 
-	return msg, nil
+	// If we didn't decode any messages, return an error
+	if len(messages) == 0 {
+		return nil, fmt.Errorf("no valid ASTERIX messages in packet")
+	}
+
+	// Return the first message and store the rest
+	firstMsg := messages[0]
+	if len(messages) > 1 {
+		r.pendingMessages = messages[1:]
+	}
+
+	return firstMsg, nil
 }
 
 // Close closes the underlying connection

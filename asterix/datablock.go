@@ -10,7 +10,13 @@ import (
 	"time"
 )
 
-// DataBlock represents a complete ASTERIX message
+// DataBlock represents a complete ASTERIX message.
+//
+// Thread Safety: DataBlock is NOT safe for concurrent use.
+// Each DataBlock instance should be accessed by only one goroutine at a time,
+// or protected by external synchronization (e.g., a mutex).
+// Methods that modify the DataBlock (AddRecord, Clear, SetBlockable, EncodeRecord)
+// should not be called concurrently with any other methods.
 type DataBlock struct {
 	category  Category  // Category of this data block
 	records   []*Record // Records within this data block
@@ -54,11 +60,11 @@ func (db *DataBlock) AddRecord(record *Record) error {
 }
 
 // Records returns all records in the data block
+// WARNING: The returned slice contains pointers to the original records.
+// Modifying the records will affect the data block. This is intentional for performance.
+// If you need a deep copy, use Clone() instead.
 func (db *DataBlock) Records() []*Record {
-	// Return a copy to prevent modification
-	records := make([]*Record, len(db.records))
-	copy(records, db.records)
-	return records
+	return db.records
 }
 
 // Encode serializes the data block according to ASTERIX specification
@@ -160,6 +166,12 @@ func (db *DataBlock) Decode(data []byte) error {
 		}
 
 		db.records = append(db.records, record)
+	}
+
+	// Check if we have at least one record for categories with mandatory fields
+	if len(db.records) == 0 && len(data) == 3 {
+		// Message has only CAT+LEN with no payload - this is invalid
+		return fmt.Errorf("%w: message has no records", ErrInvalidMessage)
 	}
 
 	return nil

@@ -381,7 +381,14 @@ func TestDecodeAll(t *testing.T) {
 	t.Run("Invalid message in the middle", func(t *testing.T) {
 		data := createMultipleMessages(3)
 		// Corrupt the second message's category
-		data[len(createTestMessage(Cat021, nil))] = 0 // Set invalid category
+		// First message with items from createMultipleMessages has specific length
+		firstMsgItemData := map[string][]byte{
+			"I021/010": {0, 1},
+			"I021/040": {2},
+			"I021/030": {3, 4, 5},  // i%2==0 for i=0
+		}
+		firstMsgLen := len(createTestMessage(Cat021, firstMsgItemData))
+		data[firstMsgLen] = 0 // Set invalid category for second message
 		blocks, err := decoder.DecodeAll(data)
 		if err == nil {
 			t.Error("DecodeAll() with invalid message should return error")
@@ -419,6 +426,7 @@ func TestDecodeParallel(t *testing.T) {
 	// Test with an invalid message
 	messages[5] = []byte{0x15, 0x00, 0x03} // Invalid message (too short)
 	blocks, err = decoder.DecodeParallel(messages)
+	t.Logf("DecodeParallel returned: err=%v, blocks[5]=%v", err, blocks[5])
 	if err == nil {
 		t.Error("DecodeParallel() with invalid message should return error")
 	}
@@ -470,6 +478,9 @@ func TestStreamDecode(t *testing.T) {
 		t.Errorf("StreamDecode() processed %d messages, want 5", decodedCount)
 	}
 
+	// Reset stream buffer before next test
+	decoder.ResetStream()
+
 	// Test with callback returning error
 	r = bytes.NewReader(data)
 	callbackErr := fmt.Errorf("callback error")
@@ -479,6 +490,9 @@ func TestStreamDecode(t *testing.T) {
 	if err == nil || err.Error() != "callback error: callback error" {
 		t.Errorf("StreamDecode() should propagate callback error, got: %v", err)
 	}
+
+	// Reset stream buffer before next test
+	decoder.ResetStream()
 
 	// Test with invalid data in stream
 	invalidData := append(createMultipleMessages(2), []byte{0x15, 0, 1}...) // Invalid length

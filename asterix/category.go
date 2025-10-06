@@ -8,7 +8,10 @@ type Category uint8
 
 // Define known categories
 const (
+	Cat001 Category = 1   // Monoradar Track Messages
+	Cat002 Category = 2   // Monoradar Plot Messages
 	Cat021 Category = 21  // ADS-B Reports
+	Cat034 Category = 34  // Transmission of Monoradar Service Messages
 	Cat048 Category = 48  // Monoradar Target Reports
 	Cat062 Category = 62  // System Track Data
 	Cat063 Category = 63  // Sensor Status Messages
@@ -25,7 +28,7 @@ func (c Category) String() string {
 // IsValid returns true if this is a recognized ASTERIX category
 func (c Category) IsValid() bool {
 	switch c {
-	case Cat021, Cat048, Cat062, Cat063, Cat065, Cat247, Cat252:
+	case Cat001, Cat002, Cat021, Cat034, Cat048, Cat062, Cat063, Cat065, Cat247, Cat252:
 		return true
 	default:
 		// Additional check for other valid categories
@@ -38,7 +41,7 @@ func (c Category) IsValid() bool {
 // Newer categories must not use blocking
 func (c Category) IsBlockable() bool {
 	switch c {
-	case Cat021, Cat048, Cat062, Cat063, Cat065, Cat247:
+	case Cat001, Cat002, Cat021, Cat034, Cat048, Cat062, Cat063, Cat065, Cat247:
 		return true
 	default:
 		return false
@@ -67,12 +70,36 @@ type CategoryInfo struct {
 // GetCategoryInfo returns detailed information about a category
 func GetCategoryInfo(cat Category) CategoryInfo {
 	switch cat {
+	case Cat001:
+		return CategoryInfo{
+			Number:      Cat001,
+			Name:        "CAT001",
+			Description: "Monoradar Track Messages",
+			Version:     "1.2",
+			Blockable:   true,
+		}
+	case Cat002:
+		return CategoryInfo{
+			Number:      Cat002,
+			Name:        "CAT002",
+			Description: "Monoradar Plot Messages",
+			Version:     "1.0",
+			Blockable:   true,
+		}
 	case Cat021:
 		return CategoryInfo{
 			Number:      Cat021,
 			Name:        "CAT021",
 			Description: "ADS-B Target Reports",
 			Version:     "2.6",
+			Blockable:   true,
+		}
+	case Cat034:
+		return CategoryInfo{
+			Number:      Cat034,
+			Name:        "CAT034",
+			Description: "Transmission of Monoradar Service Messages",
+			Version:     "1.29",
 			Blockable:   true,
 		}
 	case Cat048:

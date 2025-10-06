@@ -266,24 +266,24 @@ func TestTimeOfDayValidation(t *testing.T) {
 }
 
 func TestValidateFieldPresence(t *testing.T) {
-	// Test all required fields present
-	fields := map[string]bool{
-		"field1": true,  // Required and present
-		"field2": true,  // Required and present
-		"field3": false, // Not required
+	// Test all required fields present (only pass required fields to check)
+	requiredFields := map[string]bool{
+		"field1": true, // Required and present
+		"field2": true, // Required and present
+		// field3 is not required, so don't include it
 	}
-	err := ValidateFieldPresence(fields)
+	err := ValidateFieldPresence(requiredFields)
 	if err != nil {
 		t.Errorf("ValidateFieldPresence should pass when all required fields are present, got %v", err)
 	}
 
-	// Test missing required field
-	fields = map[string]bool{
+	// Test missing required field (only pass required fields to check)
+	requiredFields = map[string]bool{
 		"field1": false, // Required but missing
 		"field2": true,  // Required and present
-		"field3": false, // Not required
+		// field3 is not required, so don't include it
 	}
-	err = ValidateFieldPresence(fields)
+	err = ValidateFieldPresence(requiredFields)
 	if err == nil {
 		t.Error("ValidateFieldPresence should fail when a required field is missing")
 	}

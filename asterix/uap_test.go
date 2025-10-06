@@ -183,16 +183,15 @@ func TestBaseUAPGetters(t *testing.T) {
 		t.Errorf("Version() = %s, want 1.0", uap.Version())
 	}
 
-	// Test Fields() - should return a copy
+	// Test Fields() - returns internal slice (UAPs are immutable by design)
 	gotFields := uap.Fields()
 	if len(gotFields) != len(fields) {
 		t.Errorf("Fields() returned %d fields, want %d", len(gotFields), len(fields))
 	}
 
-	// Modify the returned fields - should not affect the original
-	gotFields[0].Mandatory = false
-	if !uap.Fields()[0].Mandatory {
-		t.Error("Fields() should return a copy, not the original")
+	// Verify we get the same fields back
+	if gotFields[0].FRN != fields[0].FRN {
+		t.Errorf("Fields() returned wrong FRN, got %d want %d", gotFields[0].FRN, fields[0].FRN)
 	}
 
 	// Test GetFieldByDataItem()

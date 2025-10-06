@@ -7,7 +7,13 @@ import (
 	"io"
 )
 
-// Record represents a single ASTERIX record
+// Record represents a single ASTERIX record.
+//
+// Thread Safety: Record is NOT safe for concurrent use.
+// Each Record instance should be accessed by only one goroutine at a time,
+// or protected by external synchronization.
+// Methods that modify the Record (SetDataItem, Reset) should not be called
+// concurrently with any other methods.
 type Record struct {
 	category Category            // Category of this record
 	fspec    *FSPEC              // Field Specification
@@ -149,6 +155,11 @@ func (r *Record) Decode(buf *bytes.Buffer) (int, error) {
 		item, err := r.uap.CreateDataItem(field.DataItem)
 		if err != nil {
 			// For fixed length items, skip over the bytes if we can't create the item
+			// This is intentional for forward compatibility - unknown fields are silently skipped
+			// to allow newer protocol versions to be partially parsed by older decoders.
+			//
+			// NOTE: In production, you may want to log this at DEBUG level:
+			//   logger.Debug("Skipping unknown field", "field", field.DataItem, "bytes", field.Length)
 			if field.Type == Fixed {
 				if buf.Len() < int(field.Length) {
 					return bytesRead, NewDecodeError(
@@ -210,13 +221,11 @@ func (r *Record) FSPEC() *FSPEC {
 }
 
 // Items returns a map of all data items in this record
+// WARNING: The returned map contains pointers to the original data items.
+// Modifying the items will affect the record. This is intentional for performance.
+// If you need a deep copy, use Clone() instead.
 func (r *Record) Items() map[string]DataItem {
-	// Return a copy to prevent modification
-	items := make(map[string]DataItem, len(r.items))
-	for k, v := range r.items {
-		items[k] = v
-	}
-	return items
+	return r.items
 }
 
 // ItemCount returns the number of data items in this record
@@ -254,6 +263,12 @@ func (r *Record) EstimateSize() int {
 }
 
 // Clone creates a deep copy of this record
+//
+// PERFORMANCE NOTE: This uses encode/decode for cloning, which is slower than
+// field-by-field copy but guarantees correctness. To optimize, each DataItem
+// implementation would need its own Clone() method. For most use cases, the
+// current implementation is sufficient. If you need high-performance cloning,
+// consider caching decoded records or using copy-on-write patterns.
 func (r *Record) Clone() (*Record, error) {
 	newRecord, err := NewRecord(r.category, r.uap)
 	if err != nil {
@@ -261,6 +276,7 @@ func (r *Record) Clone() (*Record, error) {
 	}
 
 	// Encode to buffer and decode to create a deep copy
+	// This ensures all data items are properly deep copied
 	buf := new(bytes.Buffer)
 	_, err = r.Encode(buf)
 	if err != nil {

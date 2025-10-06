@@ -78,11 +78,10 @@ func (u *BaseUAP) Version() string {
 }
 
 // Fields returns the data field definitions
+// The returned slice is the internal slice. Do not modify it.
+// UAP definitions are meant to be immutable after creation.
 func (u *BaseUAP) Fields() []DataField {
-	// Return a copy to prevent modification
-	fields := make([]DataField, len(u.fields))
-	copy(fields, u.fields)
-	return fields
+	return u.fields
 }
 
 // Validate implements basic validation checking mandatory fields

@@ -9,9 +9,12 @@ import (
 
 // MeasuredPosition implements I048/040
 // Measured position of an aircraft in local polar co-ordinates.
+// According to ASTERIX spec: Measured distance (range) expressed in
+// slant range and angle (azimuth) in the local polar coordinate system
+// of the radar station.
 type MeasuredPosition struct {
-	RHO   float64 // Measured range (NM)
-	THETA float64 // Measured azimuth (degrees)
+	RHO   float64 // Measured range (slant range) in NM, LSB = 1/256 NM, max ~256 NM
+	THETA float64 // Measured azimuth in degrees, LSB = 360°/2^16 ≈ 0.0055°
 }
 
 // Decode implements the DataItem interface
