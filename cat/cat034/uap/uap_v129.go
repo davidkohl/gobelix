@@ -93,6 +93,8 @@ var cat034Fields = []asterix.DataField{
 		Length:      1,
 		Mandatory:   false,
 	},
+	// Note: Some ASTERIX 034 variants may have I034/020 as optional/sparse.
+	// If decoding errors persist, check if your data source uses a different UAP variant.
 	{
 		FRN:         5,
 		DataItem:    "I034/041",

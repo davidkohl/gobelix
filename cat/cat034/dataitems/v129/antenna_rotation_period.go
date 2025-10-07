@@ -23,6 +23,10 @@ func NewAntennaRotationPeriod() *AntennaRotationPeriod {
 // Decode decodes the Antenna Rotation Period from bytes
 func (a *AntennaRotationPeriod) Decode(buf *bytes.Buffer) (int, error) {
 	if buf.Len() < 2 {
+		// Not enough data - if completely empty, treat as trailing garbage
+		if buf.Len() == 0 {
+			return 0, nil
+		}
 		return 0, fmt.Errorf("%w: need 2 bytes, have %d", asterix.ErrBufferTooShort, buf.Len())
 	}
 

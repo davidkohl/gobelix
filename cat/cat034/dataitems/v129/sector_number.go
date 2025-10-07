@@ -23,7 +23,9 @@ func NewSectorNumber() *SectorNumber {
 // Decode decodes the Sector Number from bytes
 func (s *SectorNumber) Decode(buf *bytes.Buffer) (int, error) {
 	if buf.Len() < 1 {
-		return 0, fmt.Errorf("%w: need 1 byte, have %d", asterix.ErrBufferTooShort, buf.Len())
+		// Empty buffer - field indicated but not present (trailing garbage)
+		// Return success with 0 bytes read to allow graceful handling
+		return 0, nil
 	}
 
 	data := buf.Next(1)

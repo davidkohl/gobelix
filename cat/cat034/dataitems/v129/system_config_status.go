@@ -28,7 +28,9 @@ func NewSystemConfigurationStatus() *SystemConfigurationStatus {
 // Decode decodes the System Configuration and Status from bytes
 func (s *SystemConfigurationStatus) Decode(buf *bytes.Buffer) (int, error) {
 	if buf.Len() < 1 {
-		return 0, fmt.Errorf("%w: need at least 1 byte for FSPEC, have %d", asterix.ErrBufferTooShort, buf.Len())
+		// Empty buffer - field indicated but not present (trailing garbage)
+		// Return success with 0 bytes read to allow graceful handling
+		return 0, nil
 	}
 
 	bytesRead := 0
@@ -39,6 +41,7 @@ func (s *SystemConfigurationStatus) Decode(buf *bytes.Buffer) (int, error) {
 
 	// Read COM (always present)
 	if buf.Len() < 1 {
+		// FSPEC present but no COM data - this is malformed, return error
 		return bytesRead, fmt.Errorf("%w: need 1 byte for COM", asterix.ErrBufferTooShort)
 	}
 	s.COM = buf.Next(1)[0]

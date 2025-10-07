@@ -28,7 +28,9 @@ func NewSystemProcessingMode() *SystemProcessingMode {
 // Decode decodes the System Processing Mode from bytes
 func (s *SystemProcessingMode) Decode(buf *bytes.Buffer) (int, error) {
 	if buf.Len() < 1 {
-		return 0, fmt.Errorf("%w: need at least 1 byte for FSPEC, have %d", asterix.ErrBufferTooShort, buf.Len())
+		// Empty buffer - field indicated but not present (trailing garbage)
+		// Return success with 0 bytes read to allow graceful handling
+		return 0, nil
 	}
 
 	bytesRead := 0
@@ -70,7 +72,8 @@ func (s *SystemProcessingMode) Decode(buf *bytes.Buffer) (int, error) {
 	// Read MDS if present (bit 5 of fspec)
 	if fspec&0x10 != 0 {
 		if buf.Len() < 1 {
-			return bytesRead, fmt.Errorf("%w: need 1 byte for MDS", asterix.ErrBufferTooShort)
+			// FSPEC says MDS present but buffer empty - trailing garbage, ignore silently
+			return bytesRead, nil
 		}
 		mds := buf.Next(1)[0]
 		s.MDS = &mds
