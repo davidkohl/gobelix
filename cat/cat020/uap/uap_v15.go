@@ -1,113 +1,97 @@
-// cat/cat020/uap/uap_v10.go
+// cat/cat020/uap/uap_v15.go
 package uap
 
 import (
 	"fmt"
 
 	"github.com/davidkohl/gobelix/asterix"
-	v10 "github.com/davidkohl/gobelix/cat/cat020/dataitems/v10"
+	cat020 "github.com/davidkohl/gobelix/cat/cat020/dataitems/v15"
 	common "github.com/davidkohl/gobelix/cat/common/dataitems"
 )
 
-// UAP10 implements the User Application Profile for ASTERIX Category 020 Edition 1.0 (November 2005)
-type UAP10 struct {
+// UAP020 implements the User Application Profile for ASTERIX Category 020
+type UAP020 struct {
 	*asterix.BaseUAP
 }
 
-// NewUAP10 creates a new instance of the Category 020 Edition 1.0 UAP
-func NewUAP10() (*UAP10, error) {
-	base, err := asterix.NewBaseUAP(asterix.Cat020, "1.0", cat020FieldsV10)
+// NewUAP15 creates a new instance of the Category 020 UAP version 1.5
+func NewUAP15() (*UAP020, error) {
+	base, err := asterix.NewBaseUAP(asterix.Cat020, "1.5", cat020Fields)
 	if err != nil {
 		return nil, err
 	}
 
-	return &UAP10{
+	return &UAP020{
 		BaseUAP: base,
 	}, nil
 }
 
-// CreateDataItem creates a new instance of a Cat020 Edition 1.0 data item
-func (u *UAP10) CreateDataItem(id string) (asterix.DataItem, error) {
+// CreateDataItem creates a new instance of a Cat020 data item
+func (u *UAP020) CreateDataItem(id string) (asterix.DataItem, error) {
 	switch id {
 	case "I020/010":
 		return &common.DataSourceIdentifier{}, nil
 	case "I020/020":
-		return v10.NewTargetReportDescriptor(), nil
+		return cat020.NewExtendedStub(id), nil
 	case "I020/140":
 		return &common.TimeOfDay{}, nil
 	case "I020/041":
-		return v10.NewPositionWGS84(), nil
+		return cat020.NewFixedStub(id, 8), nil
 	case "I020/042":
-		return v10.NewPositionCartesian(), nil
+		return cat020.NewFixedStub(id, 6), nil
 	case "I020/161":
-		return v10.NewTrackNumber(), nil
+		return cat020.NewFixedStub(id, 2), nil
 	case "I020/170":
-		return v10.NewTrackStatus(), nil
+		return cat020.NewExtendedStub(id), nil
 	case "I020/070":
-		return v10.NewMode3ACode(), nil
+		return cat020.NewFixedStub(id, 2), nil
 	case "I020/202":
-		return v10.NewCalculatedTrackVelocity(), nil
+		return cat020.NewFixedStub(id, 4), nil
 	case "I020/090":
-		return v10.NewFlightLevel(), nil
+		return cat020.NewFixedStub(id, 2), nil
 	case "I020/100":
-		return v10.NewModeCCode(), nil
+		return cat020.NewFixedStub(id, 4), nil
 	case "I020/220":
-		return v10.NewTargetAddress(), nil
+		return cat020.NewFixedStub(id, 3), nil
 	case "I020/245":
-		return v10.NewTargetIdentification(), nil
+		return cat020.NewFixedStub(id, 7), nil
 	case "I020/110":
-		return v10.NewMeasuredHeight(), nil
+		return cat020.NewFixedStub(id, 2), nil
 	case "I020/105":
-		return v10.NewGeometricAltitude(), nil
+		return cat020.NewFixedStub(id, 2), nil
 	case "I020/210":
-		return v10.NewCalculatedAcceleration(), nil
+		return cat020.NewFixedStub(id, 2), nil
 	case "I020/300":
-		return v10.NewVehicleFleetIdentification(), nil
+		return cat020.NewFixedStub(id, 1), nil
 	case "I020/310":
-		return v10.NewPreprogrammedMessage(), nil
+		return cat020.NewFixedStub(id, 1), nil
 	case "I020/500":
-		return v10.NewPositionAccuracy(), nil
+		return &cat020.PositionAccuracy{}, nil
 	case "I020/400":
-		return v10.NewContributingReceivers(), nil
+		return &cat020.ContributingDevices{}, nil
 	case "I020/250":
-		return v10.NewModeSMBData(), nil
+		return &cat020.ModeSMBData{}, nil
 	case "I020/230":
-		return v10.NewCommunicationsACAS(), nil
+		return cat020.NewFixedStub(id, 2), nil
 	case "I020/260":
-		return v10.NewACASResolutionAdvisory(), nil
+		return cat020.NewFixedStub(id, 7), nil
 	case "I020/030":
-		return v10.NewWarningErrorConditions(), nil
+		return cat020.NewExtendedStub(id), nil
 	case "I020/055":
-		return v10.NewMode1Code(), nil
+		return cat020.NewFixedStub(id, 1), nil
 	case "I020/050":
-		return v10.NewMode2Code(), nil
+		return cat020.NewFixedStub(id, 2), nil
+	case "RE020":
+		return cat020.NewExplicitStub(id), nil
+	case "SP020":
+		return cat020.NewExplicitStub(id), nil
 	default:
 		return nil, fmt.Errorf("%w: %s", asterix.ErrUnknownDataItem, id)
 	}
 }
 
-// Validate implements validations for Cat020 Edition 1.0
-func (u *UAP10) Validate(items map[string]asterix.DataItem) error {
-	// First do base validation (mandatory fields)
-	if err := u.BaseUAP.Validate(items); err != nil {
-		return err
-	}
-
-	// Additional validation: Either I020/041 or I020/042 should be present
-	// (I020/041 is mandatory for WAM, I020/042 optional for airport applications)
-	_, has041 := items["I020/041"]
-	_, has042 := items["I020/042"]
-
-	if !has041 && !has042 {
-		return fmt.Errorf("at least one position item (I020/041 or I020/042) must be present")
-	}
-
-	return nil
-}
-
-// cat020FieldsV10 defines the UAP for Category 020 Edition 1.0 (November 2005)
-var cat020FieldsV10 = []asterix.DataField{
-	// First FSPEC group (FRN 1-7)
+// cat020Fields defines the UAP for Category 020 version 1.5
+var cat020Fields = []asterix.DataField{
 	{
 		FRN:         1,
 		DataItem:    "I020/010",
@@ -121,7 +105,8 @@ var cat020FieldsV10 = []asterix.DataField{
 		DataItem:    "I020/020",
 		Description: "Target Report Descriptor",
 		Type:        asterix.Extended,
-		Mandatory:   true,
+		Length:      1,
+		Mandatory:   false,
 	},
 	{
 		FRN:         3,
@@ -137,7 +122,7 @@ var cat020FieldsV10 = []asterix.DataField{
 		Description: "Position in WGS-84 Coordinates",
 		Type:        asterix.Fixed,
 		Length:      8,
-		Mandatory:   false, // Mandatory for WAM, optional for airport applications
+		Mandatory:   false,
 	},
 	{
 		FRN:         5,
@@ -160,13 +145,13 @@ var cat020FieldsV10 = []asterix.DataField{
 		DataItem:    "I020/170",
 		Description: "Track Status",
 		Type:        asterix.Extended,
+		Length:      1,
 		Mandatory:   false,
 	},
-	// Second FSPEC group (FRN 8-14)
 	{
 		FRN:         8,
 		DataItem:    "I020/070",
-		Description: "Mode-3/A Code in Octal Representation",
+		Description: "Mode 3/A Code in Octal Representation",
 		Type:        asterix.Fixed,
 		Length:      2,
 		Mandatory:   false,
@@ -174,7 +159,7 @@ var cat020FieldsV10 = []asterix.DataField{
 	{
 		FRN:         9,
 		DataItem:    "I020/202",
-		Description: "Calculated Track Velocity in Cartesian Coord.",
+		Description: "Calculated Track Velocity in Cartesian Coordinates",
 		Type:        asterix.Fixed,
 		Length:      4,
 		Mandatory:   false,
@@ -190,7 +175,7 @@ var cat020FieldsV10 = []asterix.DataField{
 	{
 		FRN:         11,
 		DataItem:    "I020/100",
-		Description: "Mode-C Code",
+		Description: "Mode-C Code in Binary Representation",
 		Type:        asterix.Fixed,
 		Length:      4,
 		Mandatory:   false,
@@ -214,16 +199,15 @@ var cat020FieldsV10 = []asterix.DataField{
 	{
 		FRN:         14,
 		DataItem:    "I020/110",
-		Description: "Measured Height (Cartesian Coordinates)",
+		Description: "Measured Height",
 		Type:        asterix.Fixed,
 		Length:      2,
 		Mandatory:   false,
 	},
-	// Third FSPEC group (FRN 15-21)
 	{
 		FRN:         15,
 		DataItem:    "I020/105",
-		Description: "Geometric Altitude (WGS-84)",
+		Description: "Geometric Height",
 		Type:        asterix.Fixed,
 		Length:      2,
 		Mandatory:   false,
@@ -257,13 +241,15 @@ var cat020FieldsV10 = []asterix.DataField{
 		DataItem:    "I020/500",
 		Description: "Position Accuracy",
 		Type:        asterix.Compound,
+		Length:      1,
 		Mandatory:   false,
 	},
 	{
 		FRN:         20,
 		DataItem:    "I020/400",
-		Description: "Contributing Receivers",
+		Description: "Contributing Devices",
 		Type:        asterix.Repetitive,
+		Length:      1,
 		Mandatory:   false,
 	},
 	{
@@ -271,13 +257,13 @@ var cat020FieldsV10 = []asterix.DataField{
 		DataItem:    "I020/250",
 		Description: "Mode S MB Data",
 		Type:        asterix.Repetitive,
+		Length:      8,
 		Mandatory:   false,
 	},
-	// Fourth FSPEC group (FRN 22-26)
 	{
 		FRN:         22,
 		DataItem:    "I020/230",
-		Description: "Comms/ACAS Capability and Flight Status",
+		Description: "Communications/ACAS Capability and Flight Status",
 		Type:        asterix.Fixed,
 		Length:      2,
 		Mandatory:   false,
@@ -295,6 +281,7 @@ var cat020FieldsV10 = []asterix.DataField{
 		DataItem:    "I020/030",
 		Description: "Warning/Error Conditions",
 		Type:        asterix.Extended,
+		Length:      1,
 		Mandatory:   false,
 	},
 	{
@@ -311,6 +298,22 @@ var cat020FieldsV10 = []asterix.DataField{
 		Description: "Mode-2 Code in Octal Representation",
 		Type:        asterix.Fixed,
 		Length:      2,
+		Mandatory:   false,
+	},
+	{
+		FRN:         27,
+		DataItem:    "RE020",
+		Description: "Reserved Expansion Field",
+		Type:        asterix.Explicit,
+		Length:      1,
+		Mandatory:   false,
+	},
+	{
+		FRN:         28,
+		DataItem:    "SP020",
+		Description: "Special Purpose Field",
+		Type:        asterix.Explicit,
+		Length:      1,
 		Mandatory:   false,
 	},
 }

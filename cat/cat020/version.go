@@ -10,17 +10,14 @@ import (
 
 // Version constants
 const (
-	Version10  = "1.0"  // Edition 1.0 (November 2005)
-	Version110 = "1.10" // Edition 1.10
+	Version15 = "1.5"
 )
 
 // NewUAP returns the UAP for the specified version of CAT020
 func NewUAP(version string) (asterix.UAP, error) {
 	switch version {
-	case Version10:
-		return uap.NewUAP10()
-	case Version110:
-		return uap.NewUAP110()
+	case Version15:
+		return uap.NewUAP15()
 	default:
 		return nil, fmt.Errorf("unsupported CAT020 version: %s", version)
 	}
@@ -28,10 +25,10 @@ func NewUAP(version string) (asterix.UAP, error) {
 
 // LatestVersion returns the latest available version
 func LatestVersion() string {
-	return Version110
+	return Version15
 }
 
 // AvailableVersions returns all supported versions
 func AvailableVersions() []string {
-	return []string{Version10, Version110}
+	return []string{Version15}
 }

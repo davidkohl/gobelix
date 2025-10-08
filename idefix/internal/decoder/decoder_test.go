@@ -24,13 +24,13 @@ func TestCreateDecoder_Cat020Version(t *testing.T) {
 		t.Fatal("CAT020 UAP not registered")
 	}
 
-	// Verify it's version 1.0
-	if uap.Version() != "1.0" {
-		t.Errorf("Expected CAT020 version 1.0, got %s", uap.Version())
+	// Verify it's version 1.5
+	if uap.Version() != "1.5" {
+		t.Errorf("Expected CAT020 version 1.5, got %s", uap.Version())
 	}
 
 	// Also verify using the constant
-	expectedVersion := cat020.Version10
+	expectedVersion := cat020.Version15
 	if uap.Version() != expectedVersion {
 		t.Errorf("Expected CAT020 version %s, got %s", expectedVersion, uap.Version())
 	}
@@ -48,15 +48,15 @@ func TestCreateDecoder_AllCategories(t *testing.T) {
 		t.Fatalf("CreateDecoder failed: %v", err)
 	}
 
-	// Verify CAT020 is using Edition 1.0
+	// Verify CAT020 is using Edition 1.5
 	uap020 := decoder.GetUAP(asterix.Cat020)
 	if uap020 == nil {
 		t.Fatal("CAT020 UAP not registered with DumpAll")
 	}
 
-	if uap020.Version() != "1.0" {
-		t.Errorf("With DumpAll, expected CAT020 version 1.0, got %s", uap020.Version())
+	if uap020.Version() != "1.5" {
+		t.Errorf("With DumpAll, expected CAT020 version 1.5, got %s", uap020.Version())
 	}
 
-	t.Log("All categories registered successfully with CAT020 Edition 1.0 ✓")
+	t.Log("All categories registered successfully with CAT020 Edition 1.5 ✓")
 }

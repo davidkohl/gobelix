@@ -35,6 +35,7 @@ var (
 	dumpCat063 bool
 	timeout    int
 	statsEvery int
+	skipBytes  int
 )
 
 func init() {
@@ -79,6 +80,7 @@ information in a human-readable format.`,
 	// Add additional flags
 	dumpCmd.Flags().IntVar(&timeout, "timeout", 0, "Timeout in seconds (0 = no timeout)")
 	dumpCmd.Flags().IntVar(&statsEvery, "stats", 0, "Print stats every N seconds (0 = no stats)")
+	dumpCmd.Flags().IntVar(&skipBytes, "skip-bytes", 0, "Number of bytes to skip at start of each UDP packet (for CAT020 protocol wrappers)")
 
 	rootCmd.AddCommand(dumpCmd)
 }
@@ -101,6 +103,16 @@ func runDump(cmd *cobra.Command, args []string) error {
 	protocol := strings.ToLower(parts[1])
 	if protocol != "udp" && protocol != "tcp" {
 		return fmt.Errorf("protocol must be either 'udp' or 'tcp'")
+	}
+
+	// Validate skip-bytes usage
+	if skipBytes > 0 {
+		if protocol != "udp" {
+			return fmt.Errorf("--skip-bytes only supported for UDP protocol")
+		}
+		if !dumpCat020 && !dumpAll {
+			return fmt.Errorf("--skip-bytes is intended for CAT020; enable --dump020 or --dumpAll")
+		}
 	}
 
 	// Setup output
@@ -135,9 +147,10 @@ func runDump(cmd *cobra.Command, args []string) error {
 	// Create the ASTERIX reader
 	logger.Info("Creating ASTERIX reader",
 		"protocol", protocol,
-		"port", port)
+		"port", port,
+		"skip_bytes", skipBytes)
 
-	reader, err := asxreader.NewAsterixReader(protocol, port, asterixDecoder)
+	reader, err := asxreader.NewAsterixReaderWithSkip(protocol, port, asterixDecoder, skipBytes)
 	if err != nil {
 		return fmt.Errorf("failed to create ASTERIX reader: %w", err)
 	}

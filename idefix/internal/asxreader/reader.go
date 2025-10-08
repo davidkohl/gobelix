@@ -42,10 +42,19 @@ func NewReaderStats() ReaderStats {
 
 // NewAsterixReader creates an appropriate AsterixReader based on protocol
 func NewAsterixReader(protocol string, port int, decoder *asterix.Decoder) (AsterixReader, error) {
+	return NewAsterixReaderWithSkip(protocol, port, decoder, 0)
+}
+
+// NewAsterixReaderWithSkip creates an AsterixReader with optional skip bytes for UDP
+func NewAsterixReaderWithSkip(protocol string, port int, decoder *asterix.Decoder, skipBytes int) (AsterixReader, error) {
 	switch protocol {
 	case "udp":
-		return NewUDPAsterixReader(port, decoder)
+		return NewUDPAsterixReaderWithSkip(port, decoder, skipBytes)
 	case "tcp":
+		// TCP doesn't support skip bytes (use framing instead)
+		if skipBytes > 0 {
+			return nil, fmt.Errorf("skip-bytes not supported for TCP protocol")
+		}
 		return NewTCPAsterixReader(port, decoder)
 	default:
 		return nil, fmt.Errorf("unsupported protocol: %s", protocol)

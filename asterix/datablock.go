@@ -346,12 +346,22 @@ func (db *DataBlock) String() string {
 	sb.WriteString(fmt.Sprintf("ASTERIX %s Message (%d bytes, %d records)\n",
 		db.category.String(), size, len(db.records)))
 
+	// Add raw header info for debugging
+	sb.WriteString(fmt.Sprintf("  CAT: %d (0x%02X)\n", db.category, db.category))
+	sb.WriteString(fmt.Sprintf("  LEN: %d bytes\n", size))
+
 	// Add timestamp (current time)
 	sb.WriteString(fmt.Sprintf("Timestamp: %s\n", time.Now().Format(time.RFC3339)))
 
 	// For each record
 	for i, record := range db.records {
 		sb.WriteString(fmt.Sprintf("Record #%d:\n", i+1))
+
+		// Add FSPEC information
+		if fspec := record.FSPEC(); fspec != nil {
+			sb.WriteString(fmt.Sprintf("  FSPEC: %s (size: %d bytes)\n",
+				fspec.String(), fspec.Size()))
+		}
 
 		// Get items in FRN order if UAP available
 		if db.uap != nil {

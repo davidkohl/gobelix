@@ -24,10 +24,19 @@ type udpAsterixReader struct {
 
 	// Buffer for handling multiple messages per packet
 	pendingMessages []*asterix.DataBlock
+
+	// Number of bytes to skip at the start of each UDP packet (for protocol wrappers)
+	skipBytes int
 }
 
 // NewUDPAsterixReader creates a reader for UDP ASTERIX messages
 func NewUDPAsterixReader(port int, decoder *asterix.Decoder) (AsterixReader, error) {
+	return NewUDPAsterixReaderWithSkip(port, decoder, 0)
+}
+
+// NewUDPAsterixReaderWithSkip creates a reader for UDP ASTERIX messages with optional skip bytes
+// skipBytes: number of bytes to discard at the start of each UDP packet (for protocol wrappers)
+func NewUDPAsterixReaderWithSkip(port int, decoder *asterix.Decoder, skipBytes int) (AsterixReader, error) {
 	if decoder == nil {
 		return nil, fmt.Errorf("decoder cannot be nil")
 	}
@@ -48,9 +57,10 @@ func NewUDPAsterixReader(port int, decoder *asterix.Decoder) (AsterixReader, err
 	conn.SetReadDeadline(time.Now().Add(1 * time.Second))
 
 	return &udpAsterixReader{
-		conn:    conn,
-		decoder: decoder,
-		stats:   NewReaderStats(),
+		conn:      conn,
+		decoder:   decoder,
+		stats:     NewReaderStats(),
+		skipBytes: skipBytes,
 	}, nil
 }
 
@@ -99,7 +109,13 @@ func (r *udpAsterixReader) Next() (*asterix.DataBlock, error) {
 
 	// Parse all messages from the packet
 	data := buf[:n]
-	offset := 0
+
+	// Skip header bytes if configured (e.g., for protocol wrappers)
+	offset := r.skipBytes
+	if offset > len(data) {
+		return nil, fmt.Errorf("skipBytes (%d) exceeds packet size (%d)", r.skipBytes, len(data))
+	}
+
 	var messages []*asterix.DataBlock
 
 	for offset < len(data) {
