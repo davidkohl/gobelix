@@ -53,8 +53,17 @@ func (r *RadarPlotCharacteristics) Decode(buf *bytes.Buffer) (int, error) {
 
 	if fx {
 		// FX bit is set in primary subfield, which means there's an extension
-		// Not defined in the specification yet, just skip for now
-		return bytesRead, fmt.Errorf("FX bit set in primary subfield, but extensions are not defined in the specification")
+		// Not defined in v1.32, but may exist in other versions (e.g., v1.17)
+		// Skip all extension bytes (each has FX bit indicating if more follow)
+		for fx {
+			extByte := make([]byte, 1)
+			n, err := buf.Read(extByte)
+			if err != nil {
+				return bytesRead + n, fmt.Errorf("reading radar plot characteristics extension: %w", err)
+			}
+			bytesRead += n
+			fx = (extByte[0] & 0x01) != 0 // Check FX bit for next extension
+		}
 	}
 
 	// Read all the subfields that are present

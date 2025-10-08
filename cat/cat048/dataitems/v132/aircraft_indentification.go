@@ -52,7 +52,9 @@ func (a *AircraftIdentification) Decode(buf *bytes.Buffer) (int, error) {
 		}
 		ch := sixBitToASCII[code]
 		if ch == '#' {
-			return n, fmt.Errorf("invalid/reserved character code %d at position %d", code, i)
+			// Reserved/undefined code - replace with space for lenient decoding
+			// This handles version differences or corrupted data gracefully
+			ch = ' '
 		}
 		asciiChars[i] = ch
 	}
