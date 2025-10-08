@@ -61,7 +61,7 @@ func CreateDecoder(config Config) (*asterix.Decoder, error) {
 	}
 
 	if config.DumpAll || config.DumpCat020 {
-		uap020, err := cat020.NewUAP(cat020.Version110)
+		uap020, err := cat020.NewUAP(cat020.Version10)
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize Cat020 UAP: %w", err)
 		}

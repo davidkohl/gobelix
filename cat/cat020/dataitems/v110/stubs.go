@@ -83,13 +83,15 @@ func (p *PositionWGS84) Decode(buf *bytes.Buffer) (int, error) {
 	data := buf.Next(8)
 	lat := int32(data[0])<<24 | int32(data[1])<<16 | int32(data[2])<<8 | int32(data[3])
 	lon := int32(data[4])<<24 | int32(data[5])<<16 | int32(data[6])<<8 | int32(data[7])
-	p.Latitude = float64(lat) * 180.0 / (1 << 31)
-	p.Longitude = float64(lon) * 180.0 / (1 << 31)
+	// LSB = 180/2^25 degrees per spec §5.2.4
+	// For 32-bit signed: value * 180 / 2^31 = value * 180 / 2147483648
+	p.Latitude = float64(lat) * 180.0 / 2147483648.0
+	p.Longitude = float64(lon) * 180.0 / 2147483648.0
 	return 8, nil
 }
 func (p *PositionWGS84) Encode(buf *bytes.Buffer) (int, error) {
-	lat := int32(p.Latitude * (1 << 31) / 180.0)
-	lon := int32(p.Longitude * (1 << 31) / 180.0)
+	lat := int32(p.Latitude * 2147483648.0 / 180.0)
+	lon := int32(p.Longitude * 2147483648.0 / 180.0)
 	data := []byte{
 		byte(lat >> 24), byte(lat >> 16), byte(lat >> 8), byte(lat),
 		byte(lon >> 24), byte(lon >> 16), byte(lon >> 8), byte(lon),
@@ -107,13 +109,13 @@ func (p *PositionCartesian) Decode(buf *bytes.Buffer) (int, error) {
 	if x&0x800000 != 0 { x |= ^0xFFFFFF } // Sign extend
 	y := int32(data[3])<<16 | int32(data[4])<<8 | int32(data[5])
 	if y&0x800000 != 0 { y |= ^0xFFFFFF }
-	p.X = float64(x) / 128.0  // LSB = 1/128 m
-	p.Y = float64(y) / 128.0
+	p.X = float64(x) * 0.5  // LSB = 0.5 m per spec §5.2.5
+	p.Y = float64(y) * 0.5
 	return 6, nil
 }
 func (p *PositionCartesian) Encode(buf *bytes.Buffer) (int, error) {
-	x := int32(p.X * 128.0) & 0xFFFFFF
-	y := int32(p.Y * 128.0) & 0xFFFFFF
+	x := int32(p.X * 2.0) & 0xFFFFFF  // LSB = 0.5 m, so divide by 0.5 (multiply by 2)
+	y := int32(p.Y * 2.0) & 0xFFFFFF
 	data := []byte{
 		byte(x >> 16), byte(x >> 8), byte(x),
 		byte(y >> 16), byte(y >> 8), byte(y),
@@ -126,15 +128,20 @@ func (p *PositionCartesian) String() string { return fmt.Sprintf("X=%.2fm, Y=%.2
 
 // Add more stub implementations for remaining items
 func (t *TrackStatus) Decode(buf *bytes.Buffer) (int, error) {
+	// I020/170 is Extended type: read octets until FX bit is 0
 	if buf.Len() < 1 { return 0, asterix.ErrBufferTooShort }
-	b := buf.Next(1)[0]
-	t.data = []byte{b}
-	if b&0x01 != 0 && buf.Len() > 0 {
-		b2 := buf.Next(1)[0]
-		t.data = append(t.data, b2)
-		return 2, nil
+	t.data = []byte{}
+	bytesRead := 0
+	for {
+		if buf.Len() < 1 { return bytesRead, asterix.ErrBufferTooShort }
+		b := buf.Next(1)[0]
+		t.data = append(t.data, b)
+		bytesRead++
+		if b&0x01 == 0 { // FX bit is 0, end of extensions
+			break
+		}
 	}
-	return 1, nil
+	return bytesRead, nil
 }
 func (t *TrackStatus) Encode(buf *bytes.Buffer) (int, error) { n, _ := buf.Write(t.data); return n, nil }
 func (t *TrackStatus) Validate() error { return nil }
@@ -176,10 +183,28 @@ func decodeFixed(buf *bytes.Buffer, size int) ([]byte, error) {
 	return buf.Next(size), nil
 }
 
-func (m *ModeCCode) Decode(buf *bytes.Buffer) (int, error) { _, err := decodeFixed(buf, 2); return 2, err }
-func (m *ModeCCode) Encode(buf *bytes.Buffer) (int, error) { buf.Write([]byte{0, 0}); return 2, nil }
+func (m *ModeCCode) Decode(buf *bytes.Buffer) (int, error) {
+	if buf.Len() < 4 { return 0, asterix.ErrBufferTooShort }
+	data := buf.Next(4)
+	// Octet 1: V, G, spare bits
+	m.V = uint16(data[0]>>7) & 0x01
+	m.G = uint16(data[0]>>6) & 0x01
+	// Octets 1-2: Mode-C reply in Gray notation (bits 28-17)
+	// Octets 3-4: Quality bits (bits 12-1)
+	m.Code = uint16(data[0]&0x3F)<<8 | uint16(data[1])
+	return 4, nil
+}
+func (m *ModeCCode) Encode(buf *bytes.Buffer) (int, error) {
+	data := []byte{
+		byte(m.V<<7) | byte(m.G<<6) | byte((m.Code>>8)&0x3F),
+		byte(m.Code),
+		0x00, 0x00, // Quality bits (not implemented)
+	}
+	buf.Write(data)
+	return 4, nil
+}
 func (m *ModeCCode) Validate() error { return nil }
-func (m *ModeCCode) String() string { return "ModeC" }
+func (m *ModeCCode) String() string { return fmt.Sprintf("ModeC V=%d G=%d Code=%04o", m.V, m.G, m.Code) }
 
 func (t *TargetAddress) Decode(buf *bytes.Buffer) (int, error) { data, err := decodeFixed(buf, 3); if err == nil { t.Address = uint32(data[0])<<16 | uint32(data[1])<<8 | uint32(data[2]) }; return 3, err }
 func (t *TargetAddress) Encode(buf *bytes.Buffer) (int, error) { buf.Write([]byte{byte(t.Address >> 16), byte(t.Address >> 8), byte(t.Address)}); return 3, nil }
@@ -233,24 +258,26 @@ func (p *PositionAccuracy) Validate() error { return nil }
 func (p *PositionAccuracy) String() string { return "PosAccuracy" }
 
 func (c *ContributingDevices) Decode(buf *bytes.Buffer) (int, error) {
+	// I020/400 is repetitive: 1 octet REP + (1 octet per device)
 	if buf.Len() < 1 { return 0, asterix.ErrBufferTooShort }
 	rep := buf.Next(1)[0]
-	size := 1 + int(rep)
-	if buf.Len() < int(rep) { return 1, asterix.ErrBufferTooShort }
-	c.data = buf.Next(int(rep))
-	return size, nil
+	bytesNeeded := int(rep)
+	if buf.Len() < bytesNeeded { return 1, asterix.ErrBufferTooShort }
+	c.data = buf.Next(bytesNeeded)
+	return 1 + bytesNeeded, nil
 }
 func (c *ContributingDevices) Encode(buf *bytes.Buffer) (int, error) { buf.WriteByte(byte(len(c.data))); buf.Write(c.data); return 1 + len(c.data), nil }
 func (c *ContributingDevices) Validate() error { return nil }
 func (c *ContributingDevices) String() string { return "ContribDevices" }
 
 func (b *BDSRegisterData) Decode(buf *bytes.Buffer) (int, error) {
+	// I020/250 is repetitive: 1 octet REP + (8 octets per BDS register)
 	if buf.Len() < 1 { return 0, asterix.ErrBufferTooShort }
 	rep := buf.Next(1)[0]
-	size := 1 + int(rep)*8
-	if buf.Len() < int(rep)*8 { return 1, asterix.ErrBufferTooShort }
-	b.data = buf.Next(int(rep) * 8)
-	return size, nil
+	bytesNeeded := int(rep) * 8
+	if buf.Len() < bytesNeeded { return 1, asterix.ErrBufferTooShort }
+	b.data = buf.Next(bytesNeeded)
+	return 1 + bytesNeeded, nil
 }
 func (b *BDSRegisterData) Encode(buf *bytes.Buffer) (int, error) { buf.WriteByte(byte(len(b.data) / 8)); buf.Write(b.data); return 1 + len(b.data), nil }
 func (b *BDSRegisterData) Validate() error { return nil }

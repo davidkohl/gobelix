@@ -12,6 +12,7 @@ import (
 // MessageStats tracks statistics about processed ASTERIX messages
 type MessageStats struct {
 	TotalMessages int
+	Category020   int
 	Category021   int
 	Category048   int
 	Category062   int
@@ -32,6 +33,8 @@ func (s *MessageStats) IncrementCategory(cat asterix.Category) {
 	s.TotalMessages++
 
 	switch cat {
+	case asterix.Cat020:
+		s.Category020++
 	case asterix.Cat021:
 		s.Category021++
 	case asterix.Cat048:
@@ -62,9 +65,10 @@ func (s *MessageStats) LogStats(logger *slog.Logger, final bool) {
 	// For final stats, include percentages
 	if final {
 		// Calculate percentages
-		var cat021Pct, cat048Pct, cat062Pct, cat063Pct, otherPct float64
+		var cat020Pct, cat021Pct, cat048Pct, cat062Pct, cat063Pct, otherPct float64
 		if s.TotalMessages > 0 {
 			total := float64(s.TotalMessages)
+			cat020Pct = float64(s.Category020) / total * 100
 			cat021Pct = float64(s.Category021) / total * 100
 			cat048Pct = float64(s.Category048) / total * 100
 			cat062Pct = float64(s.Category062) / total * 100
@@ -75,6 +79,9 @@ func (s *MessageStats) LogStats(logger *slog.Logger, final bool) {
 		logger.Info("Final Statistics",
 			"duration", duration.Round(time.Second).String(),
 			"total_messages", s.TotalMessages,
+			"cat020", s.Category020,
+			"cat020_pct", fmt.Sprintf("%.1f%%", cat020Pct),
+
 			"cat021", s.Category021,
 			"cat021_pct", fmt.Sprintf("%.1f%%", cat021Pct),
 			"cat048", s.Category048,
@@ -91,6 +98,7 @@ func (s *MessageStats) LogStats(logger *slog.Logger, final bool) {
 		logger.Info("Statistics",
 			"duration", duration.Round(time.Second).String(),
 			"total_messages", s.TotalMessages,
+			"cat020", s.Category020,
 			"cat021", s.Category021,
 			"cat048", s.Category048,
 			"cat062", s.Category062,

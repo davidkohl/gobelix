@@ -26,6 +26,7 @@ func runList(cmd *cobra.Command, args []string) {
 
 	// Get information about known categories
 	categories := []asterix.Category{
+		asterix.Cat020,
 		asterix.Cat021,
 		asterix.Cat048,
 		asterix.Cat062,
