@@ -27,6 +27,7 @@ var (
 	dumpAll    bool
 	dumpCat001 bool
 	dumpCat002 bool
+	dumpCat020 bool
 	dumpCat021 bool
 	dumpCat034 bool
 	dumpCat048 bool
@@ -68,6 +69,7 @@ information in a human-readable format.`,
 	dumpCmd.Flags().BoolVar(&dumpAll, "dumpAll", false, "Dump all ASTERIX categories")
 	dumpCmd.Flags().BoolVar(&dumpCat001, "dump001", false, "Dump ASTERIX category 001 (Monoradar Track)")
 	dumpCmd.Flags().BoolVar(&dumpCat002, "dump002", false, "Dump ASTERIX category 002 (Monoradar Plot)")
+	dumpCmd.Flags().BoolVar(&dumpCat020, "dump020", false, "Dump ASTERIX category 020 (Multilateration)")
 	dumpCmd.Flags().BoolVar(&dumpCat021, "dump021", false, "Dump ASTERIX category 021 (ADS-B)")
 	dumpCmd.Flags().BoolVar(&dumpCat034, "dump034", false, "Dump ASTERIX category 034 (Service Messages)")
 	dumpCmd.Flags().BoolVar(&dumpCat048, "dump048", false, "Dump ASTERIX category 048 (Monoradar Target)")
@@ -119,6 +121,7 @@ func runDump(cmd *cobra.Command, args []string) error {
 		DumpAll:    dumpAll,
 		DumpCat001: dumpCat001,
 		DumpCat002: dumpCat002,
+		DumpCat020: dumpCat020,
 		DumpCat021: dumpCat021,
 		DumpCat034: dumpCat034,
 		DumpCat048: dumpCat048,

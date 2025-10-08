@@ -7,6 +7,7 @@ import (
 	"github.com/davidkohl/gobelix/asterix"
 	"github.com/davidkohl/gobelix/cat/cat001"
 	"github.com/davidkohl/gobelix/cat/cat002"
+	"github.com/davidkohl/gobelix/cat/cat020"
 	"github.com/davidkohl/gobelix/cat/cat021"
 	"github.com/davidkohl/gobelix/cat/cat034"
 	"github.com/davidkohl/gobelix/cat/cat048"
@@ -20,6 +21,7 @@ type Config struct {
 	DumpAll    bool
 	DumpCat001 bool
 	DumpCat002 bool
+	DumpCat020 bool
 	DumpCat021 bool
 	DumpCat034 bool
 	DumpCat048 bool
@@ -56,6 +58,15 @@ func CreateDecoder(config Config) (*asterix.Decoder, error) {
 		}
 		decoder.RegisterUAP(uap002)
 		uaps = append(uaps, uap002)
+	}
+
+	if config.DumpAll || config.DumpCat020 {
+		uap020, err := cat020.NewUAP(cat020.Version110)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize Cat020 UAP: %w", err)
+		}
+		decoder.RegisterUAP(uap020)
+		uaps = append(uaps, uap020)
 	}
 
 	if config.DumpAll || config.DumpCat021 {

@@ -10,6 +10,7 @@ type Category uint8
 const (
 	Cat001 Category = 1   // Monoradar Track Messages
 	Cat002 Category = 2   // Monoradar Plot Messages
+	Cat020 Category = 20  // Multilateration Target Reports
 	Cat021 Category = 21  // ADS-B Reports
 	Cat034 Category = 34  // Transmission of Monoradar Service Messages
 	Cat048 Category = 48  // Monoradar Target Reports
@@ -28,7 +29,7 @@ func (c Category) String() string {
 // IsValid returns true if this is a recognized ASTERIX category
 func (c Category) IsValid() bool {
 	switch c {
-	case Cat001, Cat002, Cat021, Cat034, Cat048, Cat062, Cat063, Cat065, Cat247, Cat252:
+	case Cat001, Cat002, Cat020, Cat021, Cat034, Cat048, Cat062, Cat063, Cat065, Cat247, Cat252:
 		return true
 	default:
 		// Additional check for other valid categories
@@ -84,6 +85,14 @@ func GetCategoryInfo(cat Category) CategoryInfo {
 			Name:        "CAT002",
 			Description: "Monoradar Plot Messages",
 			Version:     "1.0",
+			Blockable:   true,
+		}
+	case Cat020:
+		return CategoryInfo{
+			Number:      Cat020,
+			Name:        "CAT020",
+			Description: "Multilateration Target Reports",
+			Version:     "1.10",
 			Blockable:   true,
 		}
 	case Cat021:
