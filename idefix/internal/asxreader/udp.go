@@ -1,0 +1,240 @@
+// internal/asxreader/udp.go
+package asxreader
+
+import (
+	"fmt"
+	"net"
+	"sync/atomic"
+	"time"
+
+	"github.com/davidkohl/gobelix/asterix"
+)
+
+// udpAsterixReader implements AsterixReader for UDP connections
+type udpAsterixReader struct {
+	conn      *net.UDPConn
+	decoder   *asterix.Decoder
+	stats     ReaderStats
+	lastError error
+
+	// For atomic access to stats
+	bytesRead       int64
+	messagesRead    int64
+	transportErrors int32
+
+	// Buffer for handling multiple messages per packet
+	pendingMessages []*asterix.DataBlock
+
+	// Number of bytes to skip at the start of each UDP packet (for protocol wrappers)
+	skipBytes int
+}
+
+// NewUDPAsterixReader creates a reader for UDP ASTERIX messages
+func NewUDPAsterixReader(port int, decoder *asterix.Decoder) (AsterixReader, error) {
+	return NewUDPAsterixReaderWithSkip(port, decoder, 0)
+}
+
+// NewUDPAsterixReaderWithSkip creates a reader for UDP ASTERIX messages with optional skip bytes
+// skipBytes: number of bytes to discard at the start of each UDP packet (for protocol wrappers)
+func NewUDPAsterixReaderWithSkip(port int, decoder *asterix.Decoder, skipBytes int) (AsterixReader, error) {
+	if decoder == nil {
+		return nil, fmt.Errorf("decoder cannot be nil")
+	}
+
+	// Create a specific UDP address to listen on
+	addr, err := net.ResolveUDPAddr("udp", fmt.Sprintf(":%d", port))
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve UDP address: %w", err)
+	}
+
+	// Use ListenUDP directly
+	conn, err := net.ListenUDP("udp", addr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to listen on UDP port %d: %w", port, err)
+	}
+
+	// Set initial read deadline to prevent blocking indefinitely
+	conn.SetReadDeadline(time.Now().Add(1 * time.Second))
+
+	return &udpAsterixReader{
+		conn:      conn,
+		decoder:   decoder,
+		stats:     NewReaderStats(),
+		skipBytes: skipBytes,
+	}, nil
+}
+
+// Next reads and decodes the next ASTERIX message from UDP
+func (r *udpAsterixReader) Next() (*asterix.DataBlock, error) {
+	// Safety check
+	if r.conn == nil {
+		return nil, fmt.Errorf("nil UDP connection")
+	}
+
+	// If we have pending messages from a previous packet, return the next one
+	if len(r.pendingMessages) > 0 {
+		msg := r.pendingMessages[0]
+		r.pendingMessages = r.pendingMessages[1:]
+		return msg, nil
+	}
+
+	// Simple fixed buffer for UDP - no pool required
+	buf := make([]byte, 65536) // Max UDP packet size
+
+	// Read the next packet
+	n, addr, err := r.conn.ReadFromUDP(buf)
+	if err != nil {
+		r.lastError = err
+		atomic.AddInt32(&r.transportErrors, 1)
+
+		// Check if it's a timeout error - this is expected when we have a read deadline
+		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+			return nil, fmt.Errorf("UDP read timeout: %w", err)
+		}
+
+		return nil, fmt.Errorf("reading UDP packet: %w", err)
+	}
+
+	// Handle empty packet
+	if n == 0 {
+		return nil, fmt.Errorf("received empty UDP packet")
+	}
+
+	// Update stats
+	atomic.AddInt64(&r.bytesRead, int64(n))
+	if addr != nil {
+		r.stats.SourceAddr = addr.String()
+	}
+	r.stats.ConnectionTime = time.Since(r.stats.StartTime)
+
+	// Parse all messages from the packet
+	data := buf[:n]
+
+	// Skip header bytes if configured (e.g., for protocol wrappers)
+	offset := r.skipBytes
+	if offset > len(data) {
+		return nil, fmt.Errorf("skipBytes (%d) exceeds packet size (%d)", r.skipBytes, len(data))
+	}
+
+	var messages []*asterix.DataBlock
+
+	for offset < len(data) {
+		// Need at least 3 bytes for header
+		if len(data)-offset < 3 {
+			break
+		}
+
+		// Read the length of the next message
+		msgLength := int(data[offset+1])<<8 | int(data[offset+2])
+		if msgLength < 3 {
+			// Invalid message length - data is corrupted
+			// For UDP, discard the entire packet to avoid propagating corruption
+			if len(messages) == 0 {
+				return nil, fmt.Errorf("invalid message length %d in UDP packet", msgLength)
+			}
+			// Return what we have so far and discard the rest of the packet
+			break
+		}
+
+		// Check if we have enough data for the complete message
+		if offset+msgLength > len(data) {
+			// Incomplete message - this might indicate truncation or corruption
+			// For UDP, we should receive complete messages in each packet
+			if len(messages) == 0 {
+				return nil, fmt.Errorf("incomplete message in UDP packet (need %d bytes, have %d)", msgLength, len(data)-offset)
+			}
+			// Return what we have so far and discard the rest
+			break
+		}
+
+		// Extract the message data
+		msgData := data[offset : offset+msgLength]
+
+		// Decode the message
+		msg, err := r.decoder.Decode(msgData)
+		if err != nil {
+			// Decoding error detected - data might be corrupted
+			// For UDP, we MUST NOT trust the msgLength from potentially corrupted data
+			// to skip forward, as this will cause us to read from wrong offsets and
+			// interpret random payload bytes as headers (leading to spurious SAC values, etc.)
+			//
+			// Instead, discard the entire packet to maintain message boundary integrity.
+			if len(messages) == 0 {
+				// First message failed - return the error with hex dump for debugging
+				hexDump := formatHexDump(msgData, 256) // Limit to first 256 bytes
+				return nil, fmt.Errorf("decoding ASTERIX message: %w\nRaw bytes (first %d of %d): %s", err, min(256, len(msgData)), len(msgData), hexDump)
+			}
+			// We successfully decoded some messages before this error.
+			// Return those and discard the rest of the packet to avoid corruption propagation.
+			break
+		}
+
+		messages = append(messages, msg)
+		atomic.AddInt64(&r.messagesRead, 1)
+		offset += msgLength
+	}
+
+	// If we didn't decode any messages, return an error
+	if len(messages) == 0 {
+		return nil, fmt.Errorf("no valid ASTERIX messages in packet")
+	}
+
+	// Return the first message and store the rest
+	firstMsg := messages[0]
+	if len(messages) > 1 {
+		r.pendingMessages = messages[1:]
+	}
+
+	return firstMsg, nil
+}
+
+// Close closes the underlying connection
+func (r *udpAsterixReader) Close() error {
+	if r.conn != nil {
+		return r.conn.Close()
+	}
+	return nil
+}
+
+// Protocol returns the transport protocol name
+func (r *udpAsterixReader) Protocol() string {
+	return "UDP"
+}
+
+// Stats returns reader statistics
+func (r *udpAsterixReader) Stats() ReaderStats {
+	// Return a copy with atomic loads to avoid race conditions
+	return ReaderStats{
+		BytesRead:       atomic.LoadInt64(&r.bytesRead),
+		MessagesRead:    atomic.LoadInt64(&r.messagesRead),
+		TransportErrors: int(atomic.LoadInt32(&r.transportErrors)),
+		ConnectionTime:  time.Since(r.stats.StartTime),
+		SourceAddr:      r.stats.SourceAddr,
+		StartTime:       r.stats.StartTime,
+	}
+}
+
+// SetReadDeadline sets a deadline for the next ReadFromUDP call
+func (r *udpAsterixReader) SetReadDeadline(t time.Time) error {
+	if r.conn == nil {
+		return fmt.Errorf("nil UDP connection")
+	}
+	return r.conn.SetReadDeadline(t)
+}
+
+// formatHexDump formats bytes as a hex string for debugging
+func formatHexDump(data []byte, maxBytes int) string {
+	if len(data) > maxBytes {
+		data = data[:maxBytes]
+	}
+	result := ""
+	for i, b := range data {
+		if i > 0 && i%16 == 0 {
+			result += "\n"
+		} else if i > 0 {
+			result += " "
+		}
+		result += fmt.Sprintf("%02x", b)
+	}
+	return result
+}

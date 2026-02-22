@@ -1,0 +1,500 @@
+// asterix/datablock.go
+package asterix
+
+import (
+	"bytes"
+	"encoding/binary"
+	"fmt"
+	"io"
+	"strings"
+	"time"
+)
+
+// DataBlock represents a complete ASTERIX message.
+//
+// Thread Safety: DataBlock is NOT safe for concurrent use.
+// Each DataBlock instance should be accessed by only one goroutine at a time,
+// or protected by external synchronization (e.g., a mutex).
+// Methods that modify the DataBlock (AddRecord, Clear, SetBlockable, EncodeRecord)
+// should not be called concurrently with any other methods.
+type DataBlock struct {
+	category  Category  // Category of this data block
+	records   []*Record // Records within this data block
+	uap       UAP       // User Application Profile
+	blockable bool      // Whether this data block supports blocking
+}
+
+// NewDataBlock creates a new ASTERIX data block
+func NewDataBlock(category Category, uap UAP) (*DataBlock, error) {
+	if !category.IsValid() {
+		return nil, fmt.Errorf("%w: %d", ErrInvalidCategory, category)
+	}
+	if uap == nil {
+		return nil, fmt.Errorf("%w: UAP cannot be nil", ErrInvalidMessage)
+	}
+	if uap.Category() != category {
+		return nil, fmt.Errorf("%w: UAP category %d does not match block category %d",
+			ErrInvalidCategory, uap.Category(), category)
+	}
+
+	return &DataBlock{
+		category:  category,
+		records:   make([]*Record, 0, 4), // Pre-allocate for typical case
+		uap:       uap,
+		blockable: category.IsBlockable(),
+	}, nil
+}
+
+// AddRecord adds a record to the data block
+func (db *DataBlock) AddRecord(record *Record) error {
+	if record == nil {
+		return fmt.Errorf("%w: record cannot be nil", ErrInvalidMessage)
+	}
+	if record.Category() != db.category {
+		return fmt.Errorf("%w: record category %d does not match block category %d",
+			ErrInvalidCategory, record.Category(), db.category)
+	}
+
+	db.records = append(db.records, record)
+	return nil
+}
+
+// Records returns all records in the data block
+// WARNING: The returned slice contains pointers to the original records.
+// Modifying the records will affect the data block. This is intentional for performance.
+// If you need a deep copy, use Clone() instead.
+func (db *DataBlock) Records() []*Record {
+	return db.records
+}
+
+// Encode serializes the data block according to ASTERIX specification
+func (db *DataBlock) Encode() ([]byte, error) {
+	return db.EncodeWithBuffer(nil)
+}
+
+// EncodeWithBuffer serializes the data block using the provided buffer
+func (db *DataBlock) EncodeWithBuffer(buf *bytes.Buffer) ([]byte, error) {
+	if buf == nil {
+		buf = new(bytes.Buffer)
+	} else {
+		buf.Reset()
+	}
+
+	// Write category
+	if err := buf.WriteByte(byte(db.category)); err != nil {
+		return nil, fmt.Errorf("writing category: %w", err)
+	}
+
+	// Reserve space for length (2 bytes)
+	if err := binary.Write(buf, binary.BigEndian, uint16(0)); err != nil {
+		return nil, fmt.Errorf("reserving length: %w", err)
+	}
+
+	// If the category doesn't support blocking or there's only one record,
+	// encode as a single record (no blocking)
+	if !db.blockable || len(db.records) == 1 {
+		for i, record := range db.records {
+			_, err := record.Encode(buf)
+			if err != nil {
+				return nil, fmt.Errorf("encoding record %d: %w", i, err)
+			}
+		}
+	} else {
+		// Use blocking for multiple records
+		for i, record := range db.records {
+			// Pre-encode the record to a temporary buffer
+			recordBuf := new(bytes.Buffer)
+			_, err := record.Encode(recordBuf)
+			if err != nil {
+				return nil, fmt.Errorf("encoding record %d: %w", i, err)
+			}
+
+			// Write the encoded record to the main buffer
+			_, err = buf.Write(recordBuf.Bytes())
+			if err != nil {
+				return nil, fmt.Errorf("writing record %d: %w", i, err)
+			}
+		}
+	}
+
+	// Update length
+	data := buf.Bytes()
+	binary.BigEndian.PutUint16(data[1:3], uint16(len(data)))
+
+	return data, nil
+}
+
+// Decode parses an ASTERIX data block from bytes
+func (db *DataBlock) Decode(data []byte) error {
+	if len(data) < 3 {
+		return fmt.Errorf("%w: data too short", ErrInvalidMessage)
+	}
+
+	// Verify category
+	cat := Category(data[0])
+	if cat != db.category {
+		return fmt.Errorf("%w: expected %d, got %d",
+			ErrInvalidCategory, db.category, cat)
+	}
+
+	// Check length
+	length := binary.BigEndian.Uint16(data[1:3])
+	if int(length) != len(data) {
+		return fmt.Errorf("%w: expected %d, got %d",
+			ErrInvalidLength, length, len(data))
+	}
+
+	// Clear existing records
+	db.records = db.records[:0]
+
+	// Read records
+	buf := bytes.NewBuffer(data[3:]) // Skip CAT/LEN
+	for buf.Len() > 0 {
+		record, err := NewRecord(db.category, db.uap)
+		if err != nil {
+			return fmt.Errorf("creating record: %w", err)
+		}
+
+		// Try to decode the record
+		_, err = record.Decode(buf)
+		if err != nil {
+			// If we hit EOF while processing the last record, we can ignore it
+			if err == io.EOF && buf.Len() == 0 {
+				break
+			}
+			return fmt.Errorf("decoding record: %w", err)
+		}
+
+		db.records = append(db.records, record)
+	}
+
+	// Check if we have at least one record for categories with mandatory fields
+	if len(db.records) == 0 && len(data) == 3 {
+		// Message has only CAT+LEN with no payload - this is invalid
+		return fmt.Errorf("%w: message has no records", ErrInvalidMessage)
+	}
+
+	// NOTE: SAC/SIC validation is disabled by default because some radar systems
+	// (particularly data concentrators) aggregate records from multiple radar sources
+	// (different SAC/SIC) into a single ASTERIX message. While this violates the
+	// ASTERIX specification, it's common in real-world deployments.
+	//
+	// The validation can be re-enabled for debugging buffer misalignment issues
+	// by uncommenting the code below.
+	/*
+	if err := db.validateSACandSICConsistency(); err != nil {
+		return err
+	}
+	*/
+
+	return nil
+}
+
+// DecodeFrom decodes a data block from a reader
+func (db *DataBlock) DecodeFrom(r io.Reader) error {
+	// Read category and length (3 bytes)
+	var header [3]byte
+	if _, err := io.ReadFull(r, header[:]); err != nil {
+		return fmt.Errorf("reading header: %w", err)
+	}
+
+	// Verify category
+	cat := Category(header[0])
+	if cat != db.category {
+		return fmt.Errorf("%w: expected %d, got %d",
+			ErrInvalidCategory, db.category, cat)
+	}
+
+	// Get length
+	length := binary.BigEndian.Uint16(header[1:3])
+	if length < 3 {
+		return fmt.Errorf("%w: length too small (%d)", ErrInvalidLength, length)
+	}
+
+	// Read the rest of the message
+	data := make([]byte, length)
+	copy(data[:3], header[:])
+	if _, err := io.ReadFull(r, data[3:]); err != nil {
+		return fmt.Errorf("reading message body: %w", err)
+	}
+
+	// Decode the complete message
+	return db.Decode(data)
+}
+
+// EncodeTo encodes a data block to a writer
+func (db *DataBlock) EncodeTo(w io.Writer) error {
+	data, err := db.Encode()
+	if err != nil {
+		return err
+	}
+	_, err = w.Write(data)
+	return err
+}
+
+// Category returns the category of this data block
+func (db *DataBlock) Category() Category {
+	return db.category
+}
+
+// UAP returns the UAP used by this data block
+func (db *DataBlock) UAP() UAP {
+	return db.uap
+}
+
+// Blockable returns whether this data block supports blocking
+func (db *DataBlock) Blockable() bool {
+	return db.blockable
+}
+
+// SetBlockable sets whether this data block supports blocking
+func (db *DataBlock) SetBlockable(blockable bool) {
+	db.blockable = blockable
+}
+
+// Clear removes all records from the data block
+func (db *DataBlock) Clear() {
+	db.records = db.records[:0]
+}
+
+// RecordCount returns the number of records in the data block
+func (db *DataBlock) RecordCount() int {
+	return len(db.records)
+}
+
+// EstimateSize estimates the encoded size of this data block in bytes
+func (db *DataBlock) EstimateSize() int {
+	size := 3 // CAT + LEN fields
+
+	// Add estimated size of each record
+	for _, record := range db.records {
+		size += record.EstimateSize()
+	}
+
+	return size
+}
+
+// EncodeRecord creates a new record for this data block, encodes the provided data items into it,
+// and adds it to the block (a helper function for common usage)
+func (db *DataBlock) EncodeRecord(items map[string]DataItem) error {
+	record, err := NewRecord(db.category, db.uap)
+	if err != nil {
+		return fmt.Errorf("creating record: %w", err)
+	}
+
+	// Add each data item to the record
+	for id, item := range items {
+		if err := record.SetDataItem(id, item); err != nil {
+			return fmt.Errorf("setting data item %s: %w", id, err)
+		}
+	}
+
+	// Add the record to the data block
+	return db.AddRecord(record)
+}
+
+// IsASRS (All Same Record Structure) checks if all records have the same FSPEC structure
+// This can be useful for optimizing encoding/decoding
+func (db *DataBlock) IsASRS() bool {
+	if len(db.records) <= 1 {
+		return true
+	}
+
+	firstFSPEC := db.records[0].FSPEC()
+	firstSize := firstFSPEC.Size()
+	// Use stack array (FSPEC is max 8 bytes)
+	var firstData [8]byte
+	firstFSPEC.EncodeToBytes(firstData[:], 0)
+
+	for i := 1; i < len(db.records); i++ {
+		fspec := db.records[i].FSPEC()
+		if fspec.Size() != firstSize {
+			return false
+		}
+
+		var data [8]byte
+		fspec.EncodeToBytes(data[:], 0)
+
+		// Compare byte by byte
+		for j := 0; j < firstSize; j++ {
+			if data[j] != firstData[j] {
+				return false
+			}
+		}
+	}
+
+	return true
+}
+
+// Clone creates a deep copy of this data block
+func (db *DataBlock) Clone() (*DataBlock, error) {
+	clone, err := NewDataBlock(db.category, db.uap)
+	if err != nil {
+		return nil, err
+	}
+
+	clone.blockable = db.blockable
+
+	// Clone each record
+	for _, record := range db.records {
+		recordClone, err := record.Clone()
+		if err != nil {
+			return nil, fmt.Errorf("cloning record: %w", err)
+		}
+		if err := clone.AddRecord(recordClone); err != nil {
+			return nil, fmt.Errorf("adding cloned record: %w", err)
+		}
+	}
+
+	return clone, nil
+}
+
+// String returns a human-readable representation of the DataBlock
+func (db *DataBlock) String() string {
+	var sb strings.Builder
+
+	// Calculate size
+	size := db.EstimateSize()
+
+	// Add header with basic information
+	sb.WriteString(fmt.Sprintf("ASTERIX %s Message (%d bytes, %d records)\n",
+		db.category.String(), size, len(db.records)))
+
+	// Add raw header info for debugging
+	sb.WriteString(fmt.Sprintf("  CAT: %d (0x%02X)\n", db.category, db.category))
+	sb.WriteString(fmt.Sprintf("  LEN: %d bytes\n", size))
+
+	// Add timestamp (current time)
+	sb.WriteString(fmt.Sprintf("Timestamp: %s\n", time.Now().Format(time.RFC3339)))
+
+	// For each record
+	for i, record := range db.records {
+		sb.WriteString(fmt.Sprintf("Record #%d:\n", i+1))
+
+		// Add FSPEC information with list of present FRNs
+		if fspec := record.FSPEC(); fspec != nil && db.uap != nil {
+			// Collect present FRNs
+			var presentFRNs []string
+			for _, field := range db.uap.Fields() {
+				if fspec.GetFRN(field.FRN) {
+					presentFRNs = append(presentFRNs, fmt.Sprintf("%d", field.FRN))
+				}
+			}
+			sb.WriteString(fmt.Sprintf("  FSPEC FRNs=%s\n", strings.Join(presentFRNs, ", ")))
+		}
+
+		// Get items in FRN order if UAP available
+		if db.uap != nil {
+			fields := db.uap.Fields()
+
+			// Print data items in FRN order
+			for _, field := range fields {
+				if item, exists := record.GetDataItem(field.DataItem); exists {
+					// Use the item's String method if available
+					var valueStr string
+					if stringer, ok := item.(fmt.Stringer); ok {
+						valueStr = stringer.String()
+					} else {
+						valueStr = fmt.Sprintf("%v", item)
+					}
+
+					sb.WriteString(fmt.Sprintf("  %s (%s): %s\n",
+						field.DataItem, field.Description, valueStr))
+				}
+			}
+		} else {
+			// Fallback if UAP not available - use items directly
+			for id, item := range record.Items() {
+				// Use the item's String method if available
+				var valueStr string
+				if stringer, ok := item.(fmt.Stringer); ok {
+					valueStr = stringer.String()
+				} else {
+					valueStr = fmt.Sprintf("%v", item)
+				}
+
+				sb.WriteString(fmt.Sprintf("  %s: %s\n", id, valueStr))
+			}
+		}
+	}
+
+	return sb.String()
+}
+
+// extractDataSourceIdentifier extracts SAC/SIC from a record without importing common package
+// Returns (sac, sic, found) where found=false if the field doesn't exist or has wrong type
+func extractDataSourceIdentifier(record *Record) (sac uint8, sic uint8, found bool) {
+	// Construct the data item ID for this category (e.g., "I001/010", "I048/010")
+	dataItemID := fmt.Sprintf("I%03d/010", record.Category())
+
+	item, exists := record.GetDataItem(dataItemID)
+	if !exists {
+		return 0, 0, false
+	}
+
+	// Use type switch to extract SAC/SIC without importing the struct type
+	// We look for a struct with SAC and SIC uint8 fields
+	type dataSourceIdentifier interface {
+		DataItem
+		// Any type with SAC and SIC uint8 fields will match
+	}
+
+	// Try to extract using reflection-free approach
+	// The DataSourceIdentifier struct has two uint8 fields: SAC and SIC
+	// We can use a generic interface approach
+	if ds, ok := item.(interface {
+		Validate() error
+		Encode(*bytes.Buffer) (int, error)
+		Decode(*bytes.Buffer) (int, error)
+		String() string
+	}); ok {
+		// Get the string representation and parse SAC/SIC from it
+		// Format is "SAC: X, SIC: Y"
+		str := ds.String()
+		var parsedSAC, parsedSIC uint8
+		_, err := fmt.Sscanf(str, "SAC: %d, SIC: %d", &parsedSAC, &parsedSIC)
+		if err == nil {
+			return parsedSAC, parsedSIC, true
+		}
+	}
+
+	return 0, 0, false
+}
+
+// validateSACandSICConsistency checks that all records in the DataBlock have the same SAC/SIC.
+// This catches buffer misalignment bugs where record boundaries are incorrectly detected,
+// causing garbage bytes to be interpreted as SAC/SIC values.
+func (db *DataBlock) validateSACandSICConsistency() error {
+	if len(db.records) <= 1 {
+		return nil // Single record or empty - no validation needed
+	}
+
+	firstSAC, firstSIC, firstFound := extractDataSourceIdentifier(db.records[0])
+	if !firstFound {
+		// First record has no Data Source Identifier - skip validation
+		return nil
+	}
+
+	// Check all subsequent records
+	for i := 1; i < len(db.records); i++ {
+		sac, sic, found := extractDataSourceIdentifier(db.records[i])
+		if !found {
+			continue // Skip records without Data Source Identifier
+		}
+
+		if sac != firstSAC || sic != firstSIC {
+			// Different SAC/SIC detected - this indicates buffer misalignment
+			return fmt.Errorf("%w: record boundary misalignment detected:\n"+
+				"  Record 0: SAC=%d, SIC=%d\n"+
+				"  Record %d: SAC=%d, SIC=%d\n"+
+				"  This usually indicates:\n"+
+				"  1. Version mismatch (e.g., v1.17 data decoded with v1.32 decoder)\n"+
+				"  2. Field parsing bug consuming wrong number of bytes\n"+
+				"  3. Corrupted data\n"+
+				"  See docs/CAT048_DEBUGGING_NOTES.md for troubleshooting",
+				ErrInvalidMessage, firstSAC, firstSIC, i, sac, sic)
+		}
+	}
+
+	return nil
+}
