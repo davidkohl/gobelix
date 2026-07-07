@@ -40,6 +40,8 @@ func (u *UAP26) CreateDataItem(id string) (asterix.DataItem, error) {
 		return &v26.EmitterCategory{}, nil
 	case "I021/040":
 		return &v26.TargetReportDescriptor{}, nil
+	case "I021/161":
+		return &common.TrackNumber{}, nil
 	case "I021/070":
 		return &v26.Mode3ACode{}, nil
 	case "I021/080":
@@ -112,6 +114,10 @@ func (u *UAP26) CreateDataItem(id string) (asterix.DataItem, error) {
 		return &v26.SurfaceCapabilities{}, nil
 	case "I021/400":
 		return &v26.ReceiverID{}, nil
+	case "RE":
+		return &v26.ReservedExpansion{}, nil
+	case "SP":
+		return &v26.SpecialPurpose{}, nil
 	default:
 		return nil, fmt.Errorf("%w: %s", asterix.ErrUnknownDataItem, id)
 	}
@@ -160,6 +166,14 @@ var cat021Fields = []asterix.DataField{
 		Type:        asterix.Extended,
 		Length:      1,
 		Mandatory:   true,
+	},
+	{
+		FRN:         3,
+		DataItem:    "I021/161",
+		Description: "Track Number",
+		Type:        asterix.Fixed,
+		Length:      2,
+		Mandatory:   false,
 	},
 	{
 		FRN:         4,
@@ -471,6 +485,20 @@ var cat021Fields = []asterix.DataField{
 		Description: "Data Ages",
 		Type:        asterix.Compound,
 		Length:      1,
+		Mandatory:   false,
+	},
+	{
+		FRN:         48,
+		DataItem:    "RE",
+		Description: "Reserved Expansion Field",
+		Type:        asterix.Explicit,
+		Mandatory:   false,
+	},
+	{
+		FRN:         49,
+		DataItem:    "SP",
+		Description: "Special Purpose Field",
+		Type:        asterix.Explicit,
 		Mandatory:   false,
 	},
 }
