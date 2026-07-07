@@ -318,7 +318,9 @@ func TestCAT021RoundTrip(t *testing.T) {
 			LDPJ: false,
 			RCF:  false,
 		},
+		"I021/161": &common.TrackNumber{Value: 1234},
 		"I021/080": &common.TargetAddress{Address: 0x3C0000},
+		"RE":       &v26cat021.ReservedExpansion{Data: []byte{2, 0xBE, 0xEF}},
 		// Optional items that don't require additional dependencies
 		"I021/170": &v26cat021.TargetIdentification{
 			Ident: "AFR1234",
@@ -355,6 +357,24 @@ func TestCAT021RoundTrip(t *testing.T) {
 			t.Fatalf("I021/170: unexpected type %T", item)
 		}
 		assertEq(t, "Ident", "AFR1234", ti.Ident)
+	})
+
+	assertItem(t, rec, "I021/161", func(item asterix.DataItem) {
+		tn, ok := item.(*common.TrackNumber)
+		if !ok {
+			t.Fatalf("I021/161: unexpected type %T", item)
+		}
+		assertEq(t, "Value", uint16(1234), tn.Value)
+	})
+
+	assertItem(t, rec, "RE", func(item asterix.DataItem) {
+		re, ok := item.(*v26cat021.ReservedExpansion)
+		if !ok {
+			t.Fatalf("RE: unexpected type %T", item)
+		}
+		if !bytes.Equal(re.Data, []byte{2, 0xBE, 0xEF}) {
+			t.Errorf("RE data: want % X, got % X", []byte{2, 0xBE, 0xEF}, re.Data)
+		}
 	})
 
 	assertItem(t, rec, "I021/130", func(item asterix.DataItem) {
