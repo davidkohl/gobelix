@@ -60,5 +60,5 @@ func (s *SpecialPurpose) String() string {
 	if len(s.Data) <= 1 {
 		return "SpecialPurpose[empty]"
 	}
-	return fmt.Sprintf("SpecialPurpose[%d bytes]", len(s.Data)-1)
+	return fmt.Sprintf("SpecialPurpose[% X]", s.Data)
 }

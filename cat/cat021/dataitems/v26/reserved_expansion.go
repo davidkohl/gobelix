@@ -121,5 +121,5 @@ func (r *ReservedExpansion) String() string {
 	if r.structured() {
 		return fmt.Sprintf("REF{BPS:%v SelH:%v GAO:%v}", r.HasBPS, r.HasSelH, r.HasGAO)
 	}
-	return fmt.Sprintf("REF{raw %d bytes}", len(r.Data))
+	return fmt.Sprintf("REF{raw % X}", r.Data)
 }
