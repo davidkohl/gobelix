@@ -320,7 +320,7 @@ func TestCAT021RoundTrip(t *testing.T) {
 		},
 		"I021/161": &common.TrackNumber{Value: 1234},
 		"I021/080": &common.TargetAddress{Address: 0x3C0000},
-		"RE":       &v26cat021.ReservedExpansion{Data: []byte{3, 0xBE, 0xEF}},
+		"RE":       &v26cat021.ReservedExpansion{Data: []byte{3, 0x00, 0xEF}},
 		// Optional items that don't require additional dependencies
 		"I021/170": &v26cat021.TargetIdentification{
 			Ident: "AFR1234",
@@ -372,8 +372,8 @@ func TestCAT021RoundTrip(t *testing.T) {
 		if !ok {
 			t.Fatalf("RE: unexpected type %T", item)
 		}
-		if !bytes.Equal(re.Data, []byte{3, 0xBE, 0xEF}) {
-			t.Errorf("RE data: want % X, got % X", []byte{3, 0xBE, 0xEF}, re.Data)
+		if !bytes.Equal(re.Data, []byte{3, 0x00, 0xEF}) {
+			t.Errorf("RE data: want % X, got % X", []byte{3, 0x00, 0xEF}, re.Data)
 		}
 	})
 

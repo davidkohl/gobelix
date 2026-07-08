@@ -82,7 +82,9 @@ func TestCAT021DecodeRealMessage(t *testing.T) {
 	})
 
 	// The RE field is the last 7 octets of the record: 07 1C 83 C0 01 44 00.
-	// Its length indicator (0x07) covers the whole field including itself.
+	// LEN=0x07 covers the whole field including itself; Items Indicator
+	// 0x1C = GAO+SGV+STA present. GAO=0x83, SGV=C0 01 44 (FX-extended
+	// primary + one extension octet), STA=00 (single primary octet, FX=0).
 	assertItem(t, rec, "RE", func(item asterix.DataItem) {
 		re, ok := item.(*v26cat021.ReservedExpansion)
 		if !ok {
@@ -96,6 +98,21 @@ func TestCAT021DecodeRealMessage(t *testing.T) {
 			t.Errorf("RE length indicator %d does not cover total field length %d (must include itself)",
 				re.Data[0], len(re.Data))
 		}
+		if !re.HasGAO || re.HasBPS || re.HasSelH || re.HasNAV || !re.HasSGV || !re.HasSTA || re.HasTNH || re.HasMES {
+			t.Fatalf("RE items indicator mismatch: got GAO=%v SGV=%v STA=%v (want only these three)",
+				re.HasGAO, re.HasSGV, re.HasSTA)
+		}
+		if !re.GAORight || re.GAOLateralM != 0 || re.GAOLongitudinalM != 6 {
+			t.Errorf("RE.GAO: want right=true lat=0m lon=6m, got right=%v lat=%dm lon=%dm",
+				re.GAORight, re.GAOLateralM, re.GAOLongitudinalM)
+		}
+		if !bytes.Equal(re.RawSGV, []byte{0xC0, 0x01, 0x44}) {
+			t.Errorf("RE.RawSGV: want C0 01 44, got % X", re.RawSGV)
+		}
+		if !bytes.Equal(re.RawSTA, []byte{0x00}) {
+			t.Errorf("RE.RawSTA: want 00, got % X", re.RawSTA)
+		}
+		t.Logf("RE.String(): %s", re.String())
 	})
 
 	// Re-encoding the decoded block must reproduce the captured bytes exactly.
