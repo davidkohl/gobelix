@@ -120,25 +120,25 @@ func (t *TargetReportDescriptor) Encode(buf *bytes.Buffer) (int, error) {
 	// Second extension if present
 	if t.hasExtensions > 1 {
 		b = 0
-		// CAT021 v2.6 second extension: bit8 LLC, bit7 IPC, bit6 NOGO,
-		// bit5 CPR, bit4 LDPJ, bit3 RCF, bit2 spare, bit1 FX
+		// CAT021 v2.6 second extension: bit8 spare, bit7 LLC, bit6 IPC,
+		// bit5 NOGO, bit4 CPR, bit3 LDPJ, bit2 RCF, bit1 FX
 		if t.LLC {
-			b |= 0x80
-		}
-		if t.IPC {
 			b |= 0x40
 		}
-		if t.NOGO {
+		if t.IPC {
 			b |= 0x20
 		}
-		if t.CPR {
+		if t.NOGO {
 			b |= 0x10
 		}
-		if t.LDPJ {
+		if t.CPR {
 			b |= 0x08
 		}
-		if t.RCF {
+		if t.LDPJ {
 			b |= 0x04
+		}
+		if t.RCF {
+			b |= 0x02
 		}
 
 		if t.hasExtensions > 2 {
@@ -230,12 +230,12 @@ func (t *TargetReportDescriptor) Decode(buf *bytes.Buffer) (int, error) {
 			}
 			bytesRead++
 
-			t.LLC = (b & 0x80) != 0
-			t.IPC = (b & 0x40) != 0
-			t.NOGO = (b & 0x20) != 0
-			t.CPR = (b & 0x10) != 0
-			t.LDPJ = (b & 0x08) != 0
-			t.RCF = (b & 0x04) != 0
+			t.LLC = (b & 0x40) != 0
+			t.IPC = (b & 0x20) != 0
+			t.NOGO = (b & 0x10) != 0
+			t.CPR = (b & 0x08) != 0
+			t.LDPJ = (b & 0x04) != 0
+			t.RCF = (b & 0x02) != 0
 			fx = (b & 0x01) != 0
 
 			// Third extension
