@@ -45,7 +45,7 @@ func (t *TargetStatus) Decode(buf *bytes.Buffer) (int, error) {
 	t.ICF = (data & 0x80) != 0  // bit 8
 	t.LNAV = (data & 0x40) != 0 // bit 7
 	t.ME = (data & 0x20) != 0   // bit 6
-	t.PS = (data >> 3) & 0x07   // bits 5-3
+	t.PS = (data >> 2) & 0x07 // bits 5-3
 	t.SS = data & 0x03          // bits 2-1
 
 	return 1, t.Validate()
@@ -66,7 +66,7 @@ func (t *TargetStatus) Encode(buf *bytes.Buffer) (int, error) {
 	if t.ME {
 		b |= 0x20
 	}
-	b |= (t.PS & 0x07) << 3
+	b |= (t.PS & 0x07) << 2
 	b |= t.SS & 0x03
 
 	err := buf.WriteByte(b)

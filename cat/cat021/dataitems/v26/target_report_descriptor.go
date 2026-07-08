@@ -42,9 +42,29 @@ type TargetReportDescriptor struct {
 	hasExtensions uint8 // Tracks which extensions are present (0-4)
 }
 
+// neededExtensions derives how many extension octets the populated fields
+// require (a zero-value literal never set the unexported hasExtensions, which
+// silently dropped every extension on encode — 2026-07-08 parity fix).
+func (t *TargetReportDescriptor) neededExtensions() uint8 {
+	switch {
+	case t.TBC != 0 || t.MBC != 0:
+		return 4
+	case t.TYP != 0 || t.STYP != 0 || t.ARA || t.SPI:
+		return 3
+	case t.IPC || t.NOGO || t.CPR || t.LDPJ || t.RCF:
+		return 2
+	case t.DCR || t.GBS || t.SIM || t.TST || t.SAA || t.CL != 0:
+		return 1
+	}
+	return 0
+}
+
 func (t *TargetReportDescriptor) Encode(buf *bytes.Buffer) (int, error) {
 	if err := t.Validate(); err != nil {
 		return 0, err
+	}
+	if n := t.neededExtensions(); n > t.hasExtensions {
+		t.hasExtensions = n
 	}
 
 	bytesWritten := 0

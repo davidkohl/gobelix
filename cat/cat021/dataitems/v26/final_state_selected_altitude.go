@@ -15,12 +15,17 @@ type FinalStateSelectedAltitude struct {
 	MV  bool  // Manage Vertical Mode active
 	AH  bool  // Altitude Hold Mode active
 	AM  bool  // Approach Mode active
-	Alt int16 // Altitude in feet, LSB = 25 ft
+	Alt float64 // Altitude in feet (13-bit raw, LSB 25 ft: range ±102,375 ft)
 }
 
 func (f *FinalStateSelectedAltitude) Encode(buf *bytes.Buffer) (int, error) {
-	// Convert from feet to raw value: LSB = 25 ft
-	raw := int16(math.Round(float64(f.Alt) / 25.0))
+	// Convert from feet to raw value: LSB = 25 ft (13-bit signed raw — the
+	// feet value itself does not fit int16 above 32767 ft, hence float64)
+	r := math.Round(f.Alt / 25.0)
+	if r < -4096 || r > 4095 {
+		return 0, fmt.Errorf("selected altitude %f ft out of 13-bit range", f.Alt)
+	}
+	raw := int16(r)
 
 	var data [2]byte
 
@@ -70,7 +75,7 @@ func (f *FinalStateSelectedAltitude) Decode(buf *bytes.Buffer) (int, error) {
 	}
 
 	// Convert to feet
-	f.Alt = rawVal * 25
+	f.Alt = float64(rawVal) * 25
 
 	return n, nil
 }
@@ -92,7 +97,7 @@ func (f *FinalStateSelectedAltitude) String() string {
 	}
 
 	if len(modes) > 0 {
-		return fmt.Sprintf("%dft [%s]", f.Alt, fmt.Sprint(modes))
+		return fmt.Sprintf("%.0fft [%s]", f.Alt, fmt.Sprint(modes))
 	}
-	return fmt.Sprintf("%dft", f.Alt)
+	return fmt.Sprintf("%.0fft", f.Alt)
 }

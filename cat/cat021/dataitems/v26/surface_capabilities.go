@@ -32,19 +32,19 @@ func (s *SurfaceCapabilities) Encode(buf *bytes.Buffer) (int, error) {
 	// First octet
 	var b1 uint8
 	if s.POA {
-		b1 |= 0x80
-	}
-	if s.CDTIS {
-		b1 |= 0x40
-	}
-	if s.B2Low {
 		b1 |= 0x20
 	}
-	if s.RAS {
+	if s.CDTIS {
 		b1 |= 0x10
 	}
-	if s.IDENT {
+	if s.B2Low {
 		b1 |= 0x08
+	}
+	if s.RAS {
+		b1 |= 0x04
+	}
+	if s.IDENT {
+		b1 |= 0x02
 	}
 	// Bits 3-2 are spare
 
@@ -84,11 +84,11 @@ func (s *SurfaceCapabilities) Decode(buf *bytes.Buffer) (int, error) {
 	}
 	bytesRead++
 
-	s.POA = (b1 & 0x80) != 0
-	s.CDTIS = (b1 & 0x40) != 0
-	s.B2Low = (b1 & 0x20) != 0
-	s.RAS = (b1 & 0x10) != 0
-	s.IDENT = (b1 & 0x08) != 0
+	s.POA = (b1 & 0x20) != 0
+	s.CDTIS = (b1 & 0x10) != 0
+	s.B2Low = (b1 & 0x08) != 0
+	s.RAS = (b1 & 0x04) != 0
+	s.IDENT = (b1 & 0x02) != 0
 
 	fx := (b1 & 0x01) != 0
 

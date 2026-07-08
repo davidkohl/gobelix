@@ -14,7 +14,7 @@ import (
 type SelectedAltitude struct {
 	SAS    bool  // Source information provided
 	Source uint8 // 0=Unknown, 1=Aircraft, 2=FCU/MCP, 3=FMS
-	Alt    int16 // Altitude in feet, LSB = 25 ft
+	Alt    float64 // Altitude in feet (13-bit raw, LSB 25 ft: range ±102,375 ft)
 }
 
 func (s *SelectedAltitude) Encode(buf *bytes.Buffer) (int, error) {
@@ -22,8 +22,13 @@ func (s *SelectedAltitude) Encode(buf *bytes.Buffer) (int, error) {
 		return 0, err
 	}
 
-	// Convert from feet to raw value: LSB = 25 ft
-	raw := int16(math.Round(float64(s.Alt) / 25.0))
+	// Convert from feet to raw value: LSB = 25 ft (13-bit signed raw — the
+	// feet value itself does not fit int16 above 32767 ft, hence float64)
+	r := math.Round(s.Alt / 25.0)
+	if r < -4096 || r > 4095 {
+		return 0, fmt.Errorf("selected altitude %f ft out of 13-bit range", s.Alt)
+	}
+	raw := int16(r)
 
 	var data [2]byte
 
@@ -69,7 +74,7 @@ func (s *SelectedAltitude) Decode(buf *bytes.Buffer) (int, error) {
 	}
 
 	// Convert to feet
-	s.Alt = rawVal * 25
+	s.Alt = float64(rawVal) * 25
 
 	return n, s.Validate()
 }
@@ -95,7 +100,7 @@ func (s *SelectedAltitude) String() string {
 	}
 
 	if s.SAS {
-		return fmt.Sprintf("%dft (%s)", s.Alt, sourceStr)
+		return fmt.Sprintf("%.0fft (%s)", s.Alt, sourceStr)
 	}
-	return fmt.Sprintf("%dft", s.Alt)
+	return fmt.Sprintf("%.0fft", s.Alt)
 }
