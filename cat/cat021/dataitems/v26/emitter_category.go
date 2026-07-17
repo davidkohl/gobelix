@@ -9,32 +9,30 @@ import (
 // EmitterCategoryType represents the type of emitter
 type EmitterCategoryType uint8
 
-// Emitter Category values
+// Emitter Category values per ASTERIX CAT021 I021/020.
+// NOTE: this enumeration is NOT the DO-260/1090ES "emitter category set A"
+// coding (where e.g. rotorcraft = 7) - ASTERIX renumbers the categories.
 const (
-	EmitterLight            EmitterCategoryType = 1  // Light aircraft (< 7000 kg)
-	EmitterSmall            EmitterCategoryType = 2  // Small aircraft (7000 to 34000 kg)
-	EmitterMedium           EmitterCategoryType = 3  // Medium aircraft (34000 to 136000 kg)
-	EmitterHigh             EmitterCategoryType = 4  // High Vortex aircraft (> 136000 kg)
-	EmitterHeavy            EmitterCategoryType = 5  // Heavy aircraft
-	EmitterHighPerformance  EmitterCategoryType = 6  // High performance aircraft
-	EmitterRotorcraft       EmitterCategoryType = 7  // Rotorcraft
-	EmitterUnassigned8      EmitterCategoryType = 8  // Unassigned
-	EmitterGlider           EmitterCategoryType = 9  // Glider / sailplane
-	EmitterLighterThanAir   EmitterCategoryType = 10 // Lighter than air
-	EmitterParachutist      EmitterCategoryType = 11 // Parachutist / skydiver
-	EmitterUltraLight       EmitterCategoryType = 12 // Ultra light / hang glider / paraglider
-	EmitterUnassigned13     EmitterCategoryType = 13 // Unassigned
-	EmitterUAV              EmitterCategoryType = 14 // Unmanned Aerial Vehicle
-	EmitterSpace            EmitterCategoryType = 15 // Space / transatmospheric vehicle
-	EmitterUnassigned16     EmitterCategoryType = 16 // Unassigned
-	EmitterSurfaceEmergency EmitterCategoryType = 17 // Surface emergency vehicle
-	EmitterSurfaceService   EmitterCategoryType = 18 // Surface service vehicle
-	EmitterPointObstacle    EmitterCategoryType = 19 // Fixed ground or tethered obstruction
-	EmitterClusterObstacle  EmitterCategoryType = 20 // Cluster obstacle
-	EmitterLineObstacle     EmitterCategoryType = 21 // Line obstacle
-	EmitterUnassigned22     EmitterCategoryType = 22 // Unassigned
-	EmitterUnassigned23     EmitterCategoryType = 23 // Unassigned
-	EmitterUnassigned24     EmitterCategoryType = 24 // Unassigned
+	EmitterLight           EmitterCategoryType = 1 // light aircraft <= 15500 lbs (~7000 kg)
+	EmitterSmall           EmitterCategoryType = 2 // 15500 lbs < small < 75000 lbs
+	EmitterMedium          EmitterCategoryType = 3 // 75000 lbs < medium < 300000 lbs
+	EmitterHighVortexLarge EmitterCategoryType = 4 // high vortex large
+	EmitterHeavy           EmitterCategoryType = 5 // heavy aircraft >= 300000 lbs
+	EmitterHighPerformance EmitterCategoryType = 6 // >5g capability and >400 kt cruise
+	// 7 to 9 reserved
+	EmitterRotorcraft     EmitterCategoryType = 10 // rotorcraft
+	EmitterGlider         EmitterCategoryType = 11 // glider / sailplane
+	EmitterLighterThanAir EmitterCategoryType = 12 // lighter-than-air
+	EmitterUAV            EmitterCategoryType = 13 // unmanned aerial vehicle
+	EmitterSpace          EmitterCategoryType = 14 // space / transatmospheric vehicle
+	EmitterUltraLight     EmitterCategoryType = 15 // ultralight / hang glider / paraglider
+	EmitterParachutist    EmitterCategoryType = 16 // parachutist / skydiver
+	// 17 to 19 reserved
+	EmitterSurfaceEmergency EmitterCategoryType = 20 // surface emergency vehicle
+	EmitterSurfaceService   EmitterCategoryType = 21 // surface service vehicle
+	EmitterPointObstacle    EmitterCategoryType = 22 // fixed ground or tethered obstruction
+	EmitterClusterObstacle  EmitterCategoryType = 23 // cluster obstacle
+	EmitterLineObstacle     EmitterCategoryType = 24 // line obstacle
 )
 
 // EmitterCategory implements I021/020
@@ -87,8 +85,8 @@ func (e *EmitterCategory) String() string {
 		return "Small Aircraft"
 	case EmitterMedium:
 		return "Medium Aircraft"
-	case EmitterHigh:
-		return "High Vortex Aircraft"
+	case EmitterHighVortexLarge:
+		return "High Vortex Large Aircraft"
 	case EmitterHeavy:
 		return "Heavy Aircraft"
 	case EmitterHighPerformance:
