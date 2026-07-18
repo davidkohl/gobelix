@@ -9,8 +9,11 @@ import (
 // ServiceManagement implements I021/016
 // Service Management field (1 octet)
 type ServiceManagement struct {
-	RP uint8 // Reporting Period in seconds (1-8)
+	RP uint8 // Report Period, LSB = 0.5 s (0 = data driven mode)
 }
+
+// Seconds returns the report period in seconds.
+func (s *ServiceManagement) Seconds() float64 { return float64(s.RP) * 0.5 }
 
 func (s *ServiceManagement) Encode(buf *bytes.Buffer) (int, error) {
 	if err := s.Validate(); err != nil {
@@ -34,12 +37,14 @@ func (s *ServiceManagement) Decode(buf *bytes.Buffer) (int, error) {
 }
 
 func (s *ServiceManagement) Validate() error {
-	if s.RP < 1 || s.RP > 8 {
-		return fmt.Errorf("invalid reporting period: %d (must be 1-8)", s.RP)
-	}
+	// All octet values are valid: RP has LSB 0.5 s covering 0-127.5 s,
+	// with 0 meaning data driven mode. Real-world ground stations send 0.
 	return nil
 }
 
 func (s *ServiceManagement) String() string {
-	return fmt.Sprintf("Reporting Period: %ds", s.RP)
+	if s.RP == 0 {
+		return "Report Period: data driven"
+	}
+	return fmt.Sprintf("Report Period: %.1fs", s.Seconds())
 }
