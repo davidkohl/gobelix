@@ -26,11 +26,12 @@ func (m *ModeSMBData) Encode(buf *bytes.Buffer) (int, error) {
 
 	bytesWritten := 0
 
-	// Write repetition factor (number of records)
-	rep := uint8(len(m.Records))
-	if rep > 255 {
+	// Write repetition factor (number of records).  Check the length before
+	// the conversion: uint8(256) would wrap to 0 and drop every record.
+	if len(m.Records) > 255 {
 		return 0, fmt.Errorf("too many Mode S MB records: %d (max 255)", len(m.Records))
 	}
+	rep := uint8(len(m.Records))
 
 	if err := buf.WriteByte(rep); err != nil {
 		return bytesWritten, fmt.Errorf("writing repetition factor: %w", err)
