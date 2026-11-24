@@ -10,14 +10,20 @@ import (
 )
 
 // GeometricHeight implements I021/140
-// Geometric Height above WGS-84 ellipsoid (2 octets)
+// Geometric Height above WGS-84 ellipsoid (2 octets, signed raw, LSB = 6.25 ft)
 type GeometricHeight struct {
-	Height int16 // Height in feet, LSB = 6.25 ft
+	Height float64 // Height in feet (spec range ±(2^15-1)*6.25 ≈ ±204793.75 ft)
 }
 
 func (g *GeometricHeight) Encode(buf *bytes.Buffer) (int, error) {
-	// Convert from feet to raw value
-	raw := int16(math.Round(float64(g.Height) / 6.25))
+	// Convert from feet to raw value. The RAW value is int16; the feet value
+	// itself exceeds int16 above 32767 ft (real geometric heights do), which
+	// is why the field is float64.
+	r := math.Round(g.Height / 6.25)
+	if r < math.MinInt16 || r > math.MaxInt16 {
+		return 0, fmt.Errorf("geometric height %f ft out of range", g.Height)
+	}
+	raw := int16(r)
 
 	var data [2]byte
 	data[0] = byte(raw >> 8)
@@ -44,7 +50,7 @@ func (g *GeometricHeight) Decode(buf *bytes.Buffer) (int, error) {
 	raw := int16(uint16(data[0])<<8 | uint16(data[1]))
 
 	// Convert to feet
-	g.Height = int16(math.Round(float64(raw) * 6.25))
+	g.Height = float64(raw) * 6.25
 
 	return n, nil
 }
@@ -54,5 +60,5 @@ func (g *GeometricHeight) Validate() error {
 }
 
 func (g *GeometricHeight) String() string {
-	return fmt.Sprintf("%dft", g.Height)
+	return fmt.Sprintf("%.2fft", g.Height)
 }

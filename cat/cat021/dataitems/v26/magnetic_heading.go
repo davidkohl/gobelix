@@ -41,7 +41,7 @@ func (m *MagneticHeading) Encode(buf *bytes.Buffer) (int, error) {
 	// Convert heading to raw value (0 to 65535 representing 0 to 360 degrees)
 	// Using the constant 65535.0 instead of 65536.0 to avoid potential overflow issues
 	// when the heading is exactly 360.0 degrees
-	rawValue := uint16(math.Round(m.Heading * (65535.0 / 360.0)))
+	rawValue := uint16(math.Round(m.Heading * (65536.0 / 360.0)))
 
 	// Write the bytes
 	var b [2]byte

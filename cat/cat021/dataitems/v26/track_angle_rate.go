@@ -21,7 +21,11 @@ func (t *TrackAngleRate) Encode(buf *bytes.Buffer) (int, error) {
 	}
 
 	// Convert from degrees/second to raw value: LSB = 1/32 degrees/second
-	raw := int16(math.Round(t.Rate * 32))
+	r := math.Round(t.Rate * 32)
+	if r < -512 || r > 511 {
+		return 0, fmt.Errorf("track angle rate %f deg/s out of 10-bit range", t.Rate)
+	}
+	raw := uint16(int16(r)) & 0x03FF // bits 16-11 are spare, must be zero
 
 	var data [2]byte
 	data[0] = byte(raw >> 8)

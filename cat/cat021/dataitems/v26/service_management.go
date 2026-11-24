@@ -8,18 +8,18 @@ import (
 
 // ServiceManagement implements I021/016
 // Service Management field (1 octet)
+//
+// RP is the raw Report Period with LSB = 0.5 seconds (CAT021 v2.6 §5.2.5).
+// RP = 0 means data-driven mode (ED-129B REQ 90); periodic mode encodes the
+// configured period, e.g. a 4-second period is RP = 8.
 type ServiceManagement struct {
-	RP uint8 // Report Period, LSB = 0.5 s (0 = data driven mode)
+	RP uint8 // Report Period, LSB = 0.5 s; 0 = data-driven
 }
 
 // Seconds returns the report period in seconds.
 func (s *ServiceManagement) Seconds() float64 { return float64(s.RP) * 0.5 }
 
 func (s *ServiceManagement) Encode(buf *bytes.Buffer) (int, error) {
-	if err := s.Validate(); err != nil {
-		return 0, err
-	}
-
 	if err := buf.WriteByte(s.RP); err != nil {
 		return 0, fmt.Errorf("writing service management: %w", err)
 	}
@@ -33,18 +33,19 @@ func (s *ServiceManagement) Decode(buf *bytes.Buffer) (int, error) {
 	}
 
 	s.RP = b
-	return 1, s.Validate()
+	return 1, nil
 }
 
+// Validate checks if the ServiceManagement contains valid data. Any raw byte
+// is a legal Report Period (0 = data-driven mode), so there is nothing to
+// reject.
 func (s *ServiceManagement) Validate() error {
-	// All octet values are valid: RP has LSB 0.5 s covering 0-127.5 s,
-	// with 0 meaning data driven mode. Real-world ground stations send 0.
 	return nil
 }
 
 func (s *ServiceManagement) String() string {
 	if s.RP == 0 {
-		return "Report Period: data driven"
+		return "Data-driven"
 	}
-	return fmt.Sprintf("Report Period: %.1fs", s.Seconds())
+	return fmt.Sprintf("Reporting Period: %.1fs", s.Seconds())
 }

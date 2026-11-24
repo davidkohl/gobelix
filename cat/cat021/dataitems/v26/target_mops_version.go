@@ -90,10 +90,13 @@ func (m *MOPSVersion) Encode(buf *bytes.Buffer) (int, error) {
 	return 1, nil
 }
 
-// Validate checks if the MOPSVersion contains valid data
+// Validate checks if the MOPSVersion contains valid data.
+// VN is a 3-bit field: values above DO-260C are reserved but occur on air
+// (transponders advertise them); a surveillance encoder must report the
+// received value faithfully, so any value that fits the field is valid.
 func (m *MOPSVersion) Validate() error {
-	if m.VN > VN_ED102B_DO260C {
-		return fmt.Errorf("invalid version number: %d", m.VN)
+	if m.VN > 7 {
+		return fmt.Errorf("version number exceeds 3-bit field: %d", m.VN)
 	}
 	if m.LTT > LTTVDL4 {
 		return fmt.Errorf("invalid link technology type: %d", m.LTT)
