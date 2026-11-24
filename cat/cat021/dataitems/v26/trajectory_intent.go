@@ -11,9 +11,9 @@ import (
 
 // TrajectoryIntentPoint represents a single trajectory intent waypoint
 type TrajectoryIntentPoint struct {
-	NAV bool    // Trajectory Change Point (TCP) number available
-	NVB bool    // TCP number valid
-	TCP uint8   // Trajectory Change Point number (0-63)
+	NAV       bool    // Trajectory Change Point (TCP) number available
+	NVB       bool    // TCP number valid
+	TCP       uint8   // Trajectory Change Point number (0-63)
 	Latitude  float64 // Latitude in WGS-84, LSB = 180/2^23
 	Longitude float64 // Longitude in WGS-84, LSB = 180/2^23
 
@@ -39,6 +39,11 @@ type TrajectoryIntent struct {
 func (t *TrajectoryIntent) Encode(buf *bytes.Buffer) (int, error) {
 	if err := t.Validate(); err != nil {
 		return 0, err
+	}
+	// Before anything is written: the repetition factor is one octet, and
+	// converting first (uint8(256) == 0) would hide the overflow.
+	if len(t.Points) > 255 {
+		return 0, fmt.Errorf("too many trajectory points: %d (max 255)", len(t.Points))
 	}
 
 	bytesWritten := 0
@@ -79,11 +84,7 @@ func (t *TrajectoryIntent) Encode(buf *bytes.Buffer) (int, error) {
 	// Write Trajectory Intent Data if present (Repetitive)
 	if len(t.Points) > 0 {
 		// Write repetition factor
-		rep := uint8(len(t.Points))
-		if rep > 255 {
-			return bytesWritten, fmt.Errorf("too many trajectory points: %d (max 255)", len(t.Points))
-		}
-
+		rep := uint8(len(t.Points)) // at most 255, checked above
 		if err := buf.WriteByte(rep); err != nil {
 			return bytesWritten, fmt.Errorf("writing repetition factor: %w", err)
 		}
