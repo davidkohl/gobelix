@@ -14,11 +14,11 @@ import (
 //	[Items Indicator] presence bits BPS/SelH/NAV/GAO/SGV/STA/TNH/MES
 //	[present sub-items in indicator-bit order]
 //
-// Structured sub-items are the fixed-length, self-contained ones: BPS (REQ
-// 274/309), SelH (REQ 311), NAV, GAO (REQ 275), TNH. SGV, STA and MES are
-// variable-length/compound (FX-extended and, for STA/MES, military-specific)
-// and are decoded only as raw bytes into their Raw* fields; String() renders
-// them as hex rather than silently dropping them.
+// Structured sub-items: BPS (REQ 274/309), SelH (REQ 311), NAV, GAO (REQ
+// 275), TNH and SGV (§2.7, decoded into the SGV* fields and also kept as
+// RawSGV). STA and MES are compound (FX-extended, MES military-specific) and
+// are decoded only as raw bytes into their Raw* fields; String() renders them
+// as hex rather than silently dropping them.
 //
 // A pre-framed payload (INCLUDING the LEN octet) can instead be carried
 // verbatim in Data; Data is ignored by Encode when any structured field is
@@ -47,8 +47,21 @@ type ReservedExpansion struct {
 	HasTNH bool
 	TNHDeg float64 // true north heading, degrees (LSB 360/2^16)
 
-	HasSGV bool
-	RawSGV []byte // Surface Ground Vector, variable length (FX-extended)
+	// SGV, Surface Ground Vector (REF §2.7), sent by aircraft on the
+	// surface instead of I021/160.  Octets 1-2: bit-16 STP, bit-15 HTS,
+	// bit-14 HTT, bit-13 HRD, bits-12/2 GSS (LSB 0.125 kt), bit-1 FX; first
+	// extension: bits-8/2 HGT (LSB 360/128°), bit-1 FX.  Further extensions
+	// are kept in RawSGV only.  Decode fills both RawSGV and the fields;
+	// Encode writes RawSGV when set, else builds the item from the fields.
+	HasSGV        bool
+	SGVStopped    bool    // STP: aircraft has stopped (else moving)
+	SGVValid      bool    // HTS: heading/ground track data valid
+	SGVTrack      bool    // HTT: HGT is the ground track (else heading)
+	SGVMagnetic   bool    // HRD: HGT referenced to magnetic north (else true north)
+	SGVSpeedKt    float64 // GSS: ground speed, kt (LSB 0.125 kt, 0-255.875)
+	SGVHasHeading bool    // first extension present (HGT sent)
+	SGVHeadingDeg float64 // HGT: heading or ground track, degrees (LSB 360/128)
+	RawSGV        []byte  // the item as sent, primary subfield + extensions
 
 	HasSTA bool
 	RawSTA []byte // Aircraft Status, compound/FX-extended
@@ -89,9 +102,14 @@ func (r *ReservedExpansion) Encode(buf *bytes.Buffer) (int, error) {
 		ind |= 0x10
 		length++
 	}
+	var sgv []byte
 	if r.HasSGV {
+		sgv = r.RawSGV
+		if len(sgv) == 0 {
+			sgv = r.encodeSGV()
+		}
 		ind |= 0x08
-		length += len(r.RawSGV)
+		length += len(sgv)
 	}
 	if r.HasSTA {
 		ind |= 0x04
@@ -172,7 +190,7 @@ func (r *ReservedExpansion) Encode(buf *bytes.Buffer) (int, error) {
 		buf.WriteByte(byte(v))
 	}
 	if r.HasSGV {
-		buf.Write(r.RawSGV)
+		buf.Write(sgv)
 	}
 	if r.HasSTA {
 		buf.Write(r.RawSTA)
@@ -187,6 +205,55 @@ func (r *ReservedExpansion) Encode(buf *bytes.Buffer) (int, error) {
 		buf.Write(r.RawMES)
 	}
 	return buf.Len() - start, nil
+}
+
+// encodeSGV builds the SGV item from the SGV* fields: two octets, plus the
+// HGT extension when SGVHasHeading.
+func (r *ReservedExpansion) encodeSGV() []byte {
+	gss := int(math.Round(r.SGVSpeedKt / 0.125))
+	if gss < 0 {
+		gss = 0
+	}
+	if gss > 0x7FF {
+		gss = 0x7FF
+	}
+	b0 := byte(gss >> 7 & 0x0F)
+	if r.SGVStopped {
+		b0 |= 0x80
+	}
+	if r.SGVValid {
+		b0 |= 0x40
+	}
+	if r.SGVTrack {
+		b0 |= 0x20
+	}
+	if r.SGVMagnetic {
+		b0 |= 0x10
+	}
+	b1 := byte(gss&0x7F) << 1
+	if !r.SGVHasHeading {
+		return []byte{b0, b1}
+	}
+	h := math.Mod(r.SGVHeadingDeg, 360)
+	if h < 0 {
+		h += 360
+	}
+	hgt := int(math.Round(h/(360.0/128))) & 0x7F // 360° wraps to 0
+	return []byte{b0, b1 | 0x01, byte(hgt) << 1}
+}
+
+// decodeSGV fills the SGV* fields from an item framed by readFXItem (at
+// least two octets, extensions as announced by FX).
+func (r *ReservedExpansion) decodeSGV(b []byte) {
+	r.SGVStopped = b[0]&0x80 != 0
+	r.SGVValid = b[0]&0x40 != 0
+	r.SGVTrack = b[0]&0x20 != 0
+	r.SGVMagnetic = b[0]&0x10 != 0
+	r.SGVSpeedKt = float64(int(b[0]&0x0F)<<7|int(b[1]>>1)) * 0.125
+	if len(b) > 2 {
+		r.SGVHasHeading = true
+		r.SGVHeadingDeg = float64(b[2]>>1) * (360.0 / 128)
+	}
 }
 
 func clampGAO(v int) int {
@@ -278,6 +345,7 @@ func (r *ReservedExpansion) Decode(buf *bytes.Buffer) (int, error) {
 		}
 		r.HasSGV = true
 		r.RawSGV = sgv
+		r.decodeSGV(sgv)
 		body = body[n:]
 	}
 	if ind&0x04 != 0 { // STA: compound, FX-extended primary + extensions.
@@ -362,7 +430,18 @@ func (r *ReservedExpansion) String() string {
 		parts = append(parts, fmt.Sprintf("GAO{lat:%dm lon:%dm %s}", r.GAOLateralM, r.GAOLongitudinalM, side))
 	}
 	if r.HasSGV {
-		parts = append(parts, fmt.Sprintf("SGV:% X", r.RawSGV))
+		sgv := fmt.Sprintf("SGV{GS:%.3fkt stopped:%v valid:%v", r.SGVSpeedKt, r.SGVStopped, r.SGVValid)
+		if r.SGVHasHeading {
+			kind, ref := "hdg", "True"
+			if r.SGVTrack {
+				kind = "trk"
+			}
+			if r.SGVMagnetic {
+				ref = "Mag"
+			}
+			sgv += fmt.Sprintf(" %s:%.4f°(%s)", kind, r.SGVHeadingDeg, ref)
+		}
+		parts = append(parts, sgv+"}")
 	}
 	if r.HasSTA {
 		parts = append(parts, fmt.Sprintf("STA:% X", r.RawSTA))

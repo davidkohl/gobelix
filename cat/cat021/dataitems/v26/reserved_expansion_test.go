@@ -234,3 +234,73 @@ func TestReservedExpansion_DecodeTruncated(t *testing.T) {
 		t.Error("Decode() with truncated buffer should error")
 	}
 }
+
+// SGV (REF §2.7) from the byte patterns of real surface reports.
+func TestReservedExpansion_SGVDecode(t *testing.T) {
+	tests := []struct {
+		name                               string
+		sgv                                []byte
+		stopped, valid, track, mag, hasHdg bool
+		speedKt, hdgDeg                    float64
+	}{
+		{"taxiing, true heading", []byte{0x41, 0x31, 0xB2}, false, true, false, false, true, 19, 250.3125},
+		{"taxiing faster", []byte{0x41, 0x51, 0xB2}, false, true, false, false, true, 21, 250.3125},
+		{"stopped, heading invalid", []byte{0xA0, 0x01, 0x00}, true, false, true, false, true, 0, 0},
+		{"magnetic ground track", []byte{0x70, 0x11, 0x44}, false, true, true, true, true, 1, 95.625},
+		{"no extension", []byte{0x41, 0x30}, false, true, false, false, false, 19, 0},
+		{"max speed", []byte{0x0F, 0xFE}, false, false, false, false, false, 255.875, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			raw := append([]byte{byte(2 + len(tt.sgv)), 0x08}, tt.sgv...)
+			var r v26.ReservedExpansion
+			if _, err := r.Decode(bytes.NewBuffer(raw)); err != nil {
+				t.Fatal(err)
+			}
+			if !r.HasSGV || !bytes.Equal(r.RawSGV, tt.sgv) {
+				t.Fatalf("HasSGV=%v Raw=% X, want raw % X", r.HasSGV, r.RawSGV, tt.sgv)
+			}
+			if r.SGVStopped != tt.stopped || r.SGVValid != tt.valid || r.SGVTrack != tt.track ||
+				r.SGVMagnetic != tt.mag || r.SGVHasHeading != tt.hasHdg {
+				t.Errorf("flags STP=%v HTS=%v HTT=%v HRD=%v hdg=%v, want %v %v %v %v %v",
+					r.SGVStopped, r.SGVValid, r.SGVTrack, r.SGVMagnetic, r.SGVHasHeading,
+					tt.stopped, tt.valid, tt.track, tt.mag, tt.hasHdg)
+			}
+			if r.SGVSpeedKt != tt.speedKt || r.SGVHeadingDeg != tt.hdgDeg {
+				t.Errorf("GS %v kt hdg %v°, want %v kt %v°", r.SGVSpeedKt, r.SGVHeadingDeg, tt.speedKt, tt.hdgDeg)
+			}
+
+			// Built from the fields alone, the item encodes to the same bytes.
+			built := r
+			built.RawSGV, built.Data = nil, nil
+			var buf bytes.Buffer
+			if _, err := built.Encode(&buf); err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(buf.Bytes(), raw) {
+				t.Errorf("encoded from fields % X, want % X", buf.Bytes(), raw)
+			}
+		})
+	}
+}
+
+func TestReservedExpansion_SGVEncodeClamps(t *testing.T) {
+	r := v26.ReservedExpansion{HasSGV: true, SGVValid: true, SGVSpeedKt: 300, SGVHasHeading: true, SGVHeadingDeg: 359.9}
+	var buf bytes.Buffer
+	if _, err := r.Encode(&buf); err != nil {
+		t.Fatal(err)
+	}
+	// GSS clamps to 0x7FF; 359.9° rounds to 360° and wraps to HGT 0.
+	want := []byte{0x05, 0x08, 0x4F, 0xFF, 0x00}
+	if !bytes.Equal(buf.Bytes(), want) {
+		t.Errorf("got % X, want % X", buf.Bytes(), want)
+	}
+}
+
+func TestReservedExpansion_SGVTruncatedExtension(t *testing.T) {
+	// FX announces the HGT octet, but the REF ends.
+	var r v26.ReservedExpansion
+	if _, err := r.Decode(bytes.NewBuffer([]byte{0x04, 0x08, 0x41, 0x31})); err == nil {
+		t.Fatal("want an error for an SGV whose extension is missing")
+	}
+}

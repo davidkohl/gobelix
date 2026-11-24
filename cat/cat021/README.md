@@ -20,7 +20,7 @@ The implementation follows the ASTERIX Category 021 specification version 2.6 an
 
 - Complete User Application Profile (UAP) definition
 - All required and optional data items
-- Support for Reserved Expansion Field (REF) for future extensions
+- Reserved Expansion Field (REF ed 1.5): BPS, SelH, NAV, GAO, TNH and SGV (Surface Ground Vector: stopped, heading valid, heading or track, true or magnetic, ground speed, heading) decoded; STA and MES kept as raw bytes
 - Support for Special Purpose Field (SPF) for non-standard information
 - Comprehensive encoding/decoding of all defined elements
 
