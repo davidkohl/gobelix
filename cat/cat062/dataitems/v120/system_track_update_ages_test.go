@@ -32,12 +32,16 @@ func TestSystemTrackUpdateAges_RoundTrip(t *testing.T) {
 			encoded: []byte{0xC0, 0x05, 0x0A}, // FSPEC=0xC0, PSR age=5, PSR track age=10
 		},
 		{
-			name:    "Subfield #5 (2 octets) - MDS age",
-			encoded: []byte{0x10, 0x00, 0x14}, // FSPEC=0x10 (bit 12), MDS age=0x0014 (20)
+			name:    "Subfield #5 (2 octets) - ADS-C age",
+			encoded: []byte{0x08, 0x00, 0x14}, // FSPEC=0x08 (bit 4), ADS-C age=0x0014 (20)
+		},
+		{
+			name:    "Subfield #4 (1 octet) - Mode S age",
+			encoded: []byte{0x10, 0x14}, // FSPEC=0x10 (bit 5), MDS age=0x14 (20)
 		},
 		{
 			name:    "Multiple subfields without extension",
-			encoded: []byte{0xF0, 0x01, 0x02, 0x00, 0x03, 0x04}, // Bits 8,7,6,5 set
+			encoded: []byte{0xF0, 0x01, 0x02, 0x03, 0x04}, // Bits 8,7,6,5 set: TRK, PSR, SSR, MDS (1 octet each)
 		},
 		{
 			name:    "Extended FSPEC - single extension byte",
@@ -52,9 +56,9 @@ func TestSystemTrackUpdateAges_RoundTrip(t *testing.T) {
 			encoded: []byte{0x81, 0x40, 0x05, 0x0A}, // Bit 8 in primary + bit 7 in extension
 		},
 		{
-			name:    "All primary subfields set (no extension)",
+			name: "All primary subfields set (no extension)",
 			// FSPEC=0xFE: bits 8,7,6,5,4,3,2 set (7 subfields)
-			// Subfield sizes: 1,1,1,2,1,1,1 = 8 bytes total
+			// Subfield sizes: 1,1,1,1,2,1,1 = 8 bytes total (ADS, #5, is 2 octets)
 			encoded: []byte{0xFE, 0x01, 0x02, 0x03, 0x04, 0x00, 0x05, 0x06, 0x07},
 		},
 		{
@@ -125,7 +129,7 @@ func TestSystemTrackUpdateAges_DecodeTruncated(t *testing.T) {
 		},
 		{
 			name:    "2-octet subfield truncated (only 1 byte)",
-			input:   []byte{0x10, 0x00}, // Bit 12 set (2-octet field), only 1 byte provided
+			input:   []byte{0x08, 0x00}, // Bit 4 set (ADS, 2-octet field), only 1 byte provided
 			wantErr: true,
 		},
 		{
@@ -140,7 +144,7 @@ func TestSystemTrackUpdateAges_DecodeTruncated(t *testing.T) {
 		},
 		{
 			name:    "Valid 2-octet subfield",
-			input:   []byte{0x10, 0x00, 0x14},
+			input:   []byte{0x08, 0x00, 0x14},
 			wantErr: false,
 		},
 	}
