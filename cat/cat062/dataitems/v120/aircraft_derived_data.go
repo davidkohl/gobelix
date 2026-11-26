@@ -28,9 +28,9 @@ type AircraftDerivedData struct {
 	TrueAirspeed *uint16 // Knots, LSB = 1 knot, range 0-2046 kt
 
 	// Subfield #6: Selected Altitude
-	SelectedAltitudeSAS    *bool   // Source information provided
-	SelectedAltitudeSource *uint8  // 0=Unknown, 1=Aircraft, 2=FCU/MCP, 3=FMS
-	SelectedAltitude       *int16  // Feet, LSB = 25 ft, range -1300 to 100000 ft
+	SelectedAltitudeSAS    *bool  // Source information provided
+	SelectedAltitudeSource *uint8 // 0=Unknown, 1=Aircraft, 2=FCU/MCP, 3=FMS
+	SelectedAltitude       *int16 // Feet, LSB = 25 ft, range -1300 to 100000 ft
 
 	// Subfield #7: Final State Selected Altitude
 	FinalStateAltitudeMV *bool  // Manage Vertical Mode active
@@ -55,10 +55,10 @@ type AircraftDerivedData struct {
 	CommunicationsB1B  *uint8 // BDS 1,0 bits 37/40 (4 bits)
 
 	// Subfield #11: Status reported by ADS-B
-	ADSBStatusAC  *uint8 // 0-3 (ACAS status)
-	ADSBStatusMN  *uint8 // 0-3 (Multiple navigational aids status)
-	ADSBStatusDC  *uint8 // 0-3 (Differential correction status)
-	ADSBStatusGBS *bool  // Transponder Ground Bit set
+	ADSBStatusAC   *uint8 // 0-3 (ACAS status)
+	ADSBStatusMN   *uint8 // 0-3 (Multiple navigational aids status)
+	ADSBStatusDC   *uint8 // 0-3 (Differential correction status)
+	ADSBStatusGBS  *bool  // Transponder Ground Bit set
 	ADSBStatusSTAT *uint8 // 0-7 (Emergency status)
 
 	// Subfield #12: ACAS Resolution Advisory Report
@@ -116,18 +116,18 @@ type AircraftDerivedData struct {
 
 // TrajectoryIntentPoint represents a single trajectory change point
 type TrajectoryIntentPoint struct {
-	TCA              bool    // TCP number available (false=available, true=not available)
-	NC               bool    // TCP compliance (false=compliance, true=non-compliance)
-	TCPNumber        uint8   // Trajectory Change Point number (0-63)
-	Altitude         int16   // Feet, LSB = 10 ft, range -1500 to 150000 ft
-	Latitude         float64 // WGS-84 degrees, LSB = 180/2^23 ≈ 2.145767e-05°
-	Longitude        float64 // WGS-84 degrees, LSB = 180/2^23 ≈ 2.145767e-05°
-	PointType        uint8   // 0-11 (waypoint type)
-	TD               uint8   // Turn direction: 0=N/A, 1=Right, 2=Left, 3=No turn
-	TRA              bool    // Turn radius available
-	TOA              bool    // Time over point available (false=available)
-	TOV              uint32  // Time over point in seconds from midnight (LSB = 1s)
-	TTR              float64 // Turn radius in NM (LSB = 0.01 NM)
+	TCA       bool    // TCP number available (false=available, true=not available)
+	NC        bool    // TCP compliance (false=compliance, true=non-compliance)
+	TCPNumber uint8   // Trajectory Change Point number (0-63)
+	Altitude  int16   // Feet, LSB = 10 ft, range -1500 to 150000 ft
+	Latitude  float64 // WGS-84 degrees, LSB = 180/2^23 ≈ 2.145767e-05°
+	Longitude float64 // WGS-84 degrees, LSB = 180/2^23 ≈ 2.145767e-05°
+	PointType uint8   // 0-11 (waypoint type)
+	TD        uint8   // Turn direction: 0=N/A, 1=Right, 2=Left, 3=No turn
+	TRA       bool    // Turn radius available
+	TOA       bool    // Time over point available (false=available)
+	TOV       uint32  // Time over point in seconds from midnight (LSB = 1s)
+	TTR       float64 // Turn radius in NM (LSB = 0.01 NM)
 }
 
 // MeteorologicalData represents weather information
@@ -141,21 +141,24 @@ type MeteorologicalData struct {
 func (a *AircraftDerivedData) Decode(buf *bytes.Buffer) (int, error) {
 	bytesRead := 0
 
-	// Read primary subfield (up to 4 octets with FX extension bits)
+	// Read primary subfield (up to 4 octets with FX extension bits).
+	// Subfields #1-#28 occupy exactly four octets; an FX bit on the fourth
+	// octet announces subfields this edition does not define, whose length
+	// is unknown, so decoding cannot continue safely.
 	primaryBytes := make([]byte, 0, 4)
-	for i := 0; i < 4; i++ {
-		octet := make([]byte, 1)
-		n, err := buf.Read(octet)
+	for {
+		octet, err := buf.ReadByte()
 		if err != nil {
-			return bytesRead, fmt.Errorf("reading aircraft derived data primary subfield octet %d: %w", i+1, err)
+			return bytesRead, fmt.Errorf("reading aircraft derived data primary subfield octet %d: %w", len(primaryBytes)+1, err)
 		}
-		bytesRead += n
-		primaryBytes = append(primaryBytes, octet[0])
+		bytesRead++
+		primaryBytes = append(primaryBytes, octet)
 
-		// Check if there's an extension
-		hasExtension := (octet[0] & 0x01) != 0
-		if !hasExtension {
+		if (octet & 0x01) == 0 {
 			break
+		}
+		if len(primaryBytes) == 4 {
+			return bytesRead, fmt.Errorf("aircraft derived data primary subfield extends beyond 4 octets")
 		}
 	}
 
@@ -220,11 +223,11 @@ func (a *AircraftDerivedData) decodeSubfield(index int, buf *bytes.Buffer) (int,
 		return a.decodeGroundSpeed(buf)
 	case 18: // #19: Velocity Uncertainty (1 octet)
 		return a.decodeVelocityUncertainty(buf)
-	case 19: // #20: Meteorological Data (Variable)
+	case 19: // #20: Meteorological Data (8 octets)
 		return a.decodeMeteorologicalData(buf)
 	case 20: // #21: Emitter Category (1 octet)
 		return a.decodeEmitterCategory(buf)
-	case 21: // #22: Position (8 octets)
+	case 21: // #22: Position (6 octets)
 		return a.decodePosition(buf)
 	case 22: // #23: Geometric Altitude (2 octets)
 		return a.decodeGeometricAltitude(buf)
@@ -386,13 +389,16 @@ func (a *AircraftDerivedData) decodeTrajectoryIntentStatus(buf *bytes.Buffer) (i
 	nvb := (data[0] & 0x40) != 0
 	a.TrajectoryIntentNVB = &nvb
 
-	// Note: There could be FX extension, but per spec it's not currently defined
-	// If FX bit is set, we should skip it
-	if (data[0] & 0x01) != 0 {
-		// Skip extension octet
-		extData := make([]byte, 1)
-		nExt, _ := buf.Read(extData)
-		n += nExt
+	// Variable length: further one-octet extents follow while FX is set.
+	// No extent content is defined in this edition, so extents are skipped.
+	last := data[0]
+	for (last & 0x01) != 0 {
+		ext, err := buf.ReadByte()
+		if err != nil {
+			return n, fmt.Errorf("reading trajectory intent status extent: %w", err)
+		}
+		n++
+		last = ext
 	}
 	return n, nil
 }
@@ -605,29 +611,39 @@ func (a *AircraftDerivedData) decodeVelocityUncertainty(buf *bytes.Buffer) (int,
 	return n, nil
 }
 
+// decodeMeteorologicalData decodes subfield #20 (8 octets, fixed length):
+// octet 1 holds the validity flags WS/WD/TMP/TRB (bits 8-5, bits 4-1 spare),
+// followed by wind speed (2, LSB 1 kt), wind direction (2, LSB 1 deg),
+// temperature (2, two's complement, LSB 0.25 degC) and turbulence (1).
+// Only values whose validity flag is set are stored.
 func (a *AircraftDerivedData) decodeMeteorologicalData(buf *bytes.Buffer) (int, error) {
-	// Meteorological data is a variable extended structure
-	// For simplicity, we'll read it as raw bytes for now
-	// A full implementation would decode wind speed, direction, temperature, turbulence
-	bytesRead := 0
+	data := make([]byte, 8)
+	n, err := buf.Read(data)
+	if err != nil || n != 8 {
+		return n, fmt.Errorf("reading meteorological data: need 8 bytes, have %d", n)
+	}
+
 	met := &MeteorologicalData{}
-
-	for {
-		data := make([]byte, 1)
-		n, err := buf.Read(data)
-		if err != nil {
-			return bytesRead + n, fmt.Errorf("reading meteorological data: %w", err)
-		}
-		bytesRead += n
-
-		// Check FX bit
-		if (data[0] & 0x01) == 0 {
-			break
-		}
+	if (data[0] & 0x80) != 0 {
+		ws := uint16(data[1])<<8 | uint16(data[2])
+		met.WindSpeed = &ws
+	}
+	if (data[0] & 0x40) != 0 {
+		wd := uint16(data[3])<<8 | uint16(data[4])
+		met.WindDirection = &wd
+	}
+	if (data[0] & 0x20) != 0 {
+		raw := int16(uint16(data[5])<<8 | uint16(data[6]))
+		tmp := float64(raw) * 0.25
+		met.Temperature = &tmp
+	}
+	if (data[0] & 0x10) != 0 {
+		trb := data[7]
+		met.Turbulence = &trb
 	}
 
 	a.MeteorologicalData = met
-	return bytesRead, nil
+	return n, nil
 }
 
 func (a *AircraftDerivedData) decodeEmitterCategory(buf *bytes.Buffer) (int, error) {
@@ -640,11 +656,13 @@ func (a *AircraftDerivedData) decodeEmitterCategory(buf *bytes.Buffer) (int, err
 	return n, nil
 }
 
+// decodePosition decodes subfield #22 (6 octets): latitude and longitude,
+// 24 bits each, two's complement, LSB = 180/2^23 degrees.
 func (a *AircraftDerivedData) decodePosition(buf *bytes.Buffer) (int, error) {
-	data := make([]byte, 8)
+	data := make([]byte, 6)
 	n, err := buf.Read(data)
-	if err != nil || n != 8 {
-		return n, fmt.Errorf("reading position: %w", err)
+	if err != nil || n != 6 {
+		return n, fmt.Errorf("reading position: need 6 bytes, have %d", n)
 	}
 
 	// Latitude (24 bits, two's complement, LSB = 180/2^23)
@@ -656,7 +674,7 @@ func (a *AircraftDerivedData) decodePosition(buf *bytes.Buffer) (int, error) {
 	a.PositionLatitude = &lat
 
 	// Longitude (24 bits, two's complement, LSB = 180/2^23)
-	rawLon := int32(uint32(data[4])<<16 | uint32(data[5])<<8 | uint32(data[6]))
+	rawLon := int32(uint32(data[3])<<16 | uint32(data[4])<<8 | uint32(data[5]))
 	if (rawLon & 0x800000) != 0 {
 		rawLon |= -0x1000000 // Sign extend from bit 23
 	}
@@ -813,7 +831,7 @@ func (a *AircraftDerivedData) buildPrimarySubfield() []byte {
 		a.CommunicationsSSC != nil || a.CommunicationsARC != nil ||
 		a.CommunicationsAIC != nil || a.CommunicationsB1A != nil ||
 		a.CommunicationsB1B != nil
-	presence[10] = a.ADSBStatusAC != nil
+	presence[10] = a.hasADSBStatus()
 	presence[11] = a.ACASResolutionAdvisory != nil
 	presence[12] = a.BarometricVerticalRate != nil
 	presence[13] = a.GeometricVerticalRate != nil
@@ -824,7 +842,7 @@ func (a *AircraftDerivedData) buildPrimarySubfield() []byte {
 	presence[18] = a.VelocityUncertainty != nil
 	presence[19] = a.MeteorologicalData != nil
 	presence[20] = a.EmitterCategory != nil
-	presence[21] = a.PositionLatitude != nil
+	presence[21] = a.PositionLatitude != nil || a.PositionLongitude != nil
 	presence[22] = a.GeometricAltitude != nil
 	presence[23] = a.PositionUncertainty != nil
 	presence[24] = len(a.ModeSMBData) > 0
@@ -871,7 +889,7 @@ func (a *AircraftDerivedData) buildPrimarySubfield() []byte {
 	return result
 }
 
-// Encode methods (simplified - only encode if field is present)
+// Encode methods (each writes nothing when its subfield is absent)
 
 func (a *AircraftDerivedData) encodeTargetAddress(buf *bytes.Buffer) (int, error) {
 	if a.TargetAddress == nil {
@@ -907,9 +925,6 @@ func (a *AircraftDerivedData) encodeMagneticHeading(buf *bytes.Buffer) (int, err
 	return buf.Write(data)
 }
 
-// Remaining encode methods follow similar pattern...
-// For brevity, I'll implement the key ones and add stubs for others
-
 func (a *AircraftDerivedData) encodeIndicatedAirspeed(buf *bytes.Buffer) (int, error) {
 	if a.IndicatedAirspeed == nil {
 		return 0, nil
@@ -926,7 +941,6 @@ func (a *AircraftDerivedData) encodeIndicatedAirspeed(buf *bytes.Buffer) (int, e
 	return buf.Write(data)
 }
 
-// Stub encode methods for remaining subfields
 func (a *AircraftDerivedData) encodeTrueAirspeed(buf *bytes.Buffer) (int, error) {
 	if a.TrueAirspeed == nil {
 		return 0, nil
@@ -935,37 +949,109 @@ func (a *AircraftDerivedData) encodeTrueAirspeed(buf *bytes.Buffer) (int, error)
 	return buf.Write(data)
 }
 
+// Every encoder whose presence bit buildPrimarySubfield sets must write the
+// subfield's full length, or the octets that follow are read at the wrong
+// offset.
+
+// encodeAltitude13 packs a 13-bit two's complement altitude (LSB = 25 ft)
+// into bits 13-1 of a two-octet subfield, leaving bits 16-14 for flags.
+func encodeAltitude13(feet int16) (byte, byte) {
+	raw := uint16(int16(math.Round(float64(feet)/25.0))) & 0x1FFF
+	return byte(raw >> 8), byte(raw)
+}
+
 func (a *AircraftDerivedData) encodeSelectedAltitude(buf *bytes.Buffer) (int, error) {
 	if a.SelectedAltitude == nil {
 		return 0, nil
 	}
-	// Full implementation would encode SAS, Source, and Altitude
-	// Stub for now
-	return 0, nil
+	hi, lo := encodeAltitude13(*a.SelectedAltitude)
+	if a.SelectedAltitudeSAS != nil && *a.SelectedAltitudeSAS {
+		hi |= 0x80
+	}
+	if a.SelectedAltitudeSource != nil {
+		hi |= (*a.SelectedAltitudeSource & 0x03) << 5
+	}
+	return buf.Write([]byte{hi, lo})
 }
 
 func (a *AircraftDerivedData) encodeFinalStateAltitude(buf *bytes.Buffer) (int, error) {
 	if a.FinalStateAltitude == nil {
 		return 0, nil
 	}
-	// Stub
-	return 0, nil
+	hi, lo := encodeAltitude13(*a.FinalStateAltitude)
+	if a.FinalStateAltitudeMV != nil && *a.FinalStateAltitudeMV {
+		hi |= 0x80
+	}
+	if a.FinalStateAltitudeAH != nil && *a.FinalStateAltitudeAH {
+		hi |= 0x40
+	}
+	if a.FinalStateAltitudeAM != nil && *a.FinalStateAltitudeAM {
+		hi |= 0x20
+	}
+	return buf.Write([]byte{hi, lo})
 }
 
+// encodeTrajectoryIntentStatus writes subfield #8 as a single octet
+// (NAV bit 8, NVB bit 7, FX clear): no extents are defined in this edition.
 func (a *AircraftDerivedData) encodeTrajectoryIntentStatus(buf *bytes.Buffer) (int, error) {
 	if a.TrajectoryIntentNAV == nil && a.TrajectoryIntentNVB == nil {
 		return 0, nil
 	}
-	// Stub
-	return 0, nil
+	var b byte
+	if a.TrajectoryIntentNAV != nil && *a.TrajectoryIntentNAV {
+		b |= 0x80
+	}
+	if a.TrajectoryIntentNVB != nil && *a.TrajectoryIntentNVB {
+		b |= 0x40
+	}
+	return buf.Write([]byte{b})
 }
 
+// encodeLatLon24 converts degrees to a 24-bit two's complement value with
+// LSB = 180/2^23 degrees.
+func encodeLatLon24(deg float64) []byte {
+	raw := uint32(int32(math.Round(deg*8388608.0/180.0))) & 0xFFFFFF
+	return []byte{byte(raw >> 16), byte(raw >> 8), byte(raw)}
+}
+
+// encodeTrajectoryIntentData writes subfield #9: a repetition factor
+// followed by 15 octets per trajectory change point.
 func (a *AircraftDerivedData) encodeTrajectoryIntentData(buf *bytes.Buffer) (int, error) {
 	if len(a.TrajectoryIntentData) == 0 {
 		return 0, nil
 	}
-	// Stub
-	return 0, nil
+	if len(a.TrajectoryIntentData) > 255 {
+		return 0, fmt.Errorf("trajectory intent data: %d points exceed the repetition factor maximum of 255", len(a.TrajectoryIntentData))
+	}
+
+	data := make([]byte, 0, 1+15*len(a.TrajectoryIntentData))
+	data = append(data, byte(len(a.TrajectoryIntentData)))
+	for _, p := range a.TrajectoryIntentData {
+		b0 := p.TCPNumber & 0x3F
+		if p.TCA {
+			b0 |= 0x80
+		}
+		if p.NC {
+			b0 |= 0x40
+		}
+		alt := uint16(p.Altitude / 10)
+		data = append(data, b0, byte(alt>>8), byte(alt))
+		data = append(data, encodeLatLon24(p.Latitude)...)
+		data = append(data, encodeLatLon24(p.Longitude)...)
+
+		b9 := (p.PointType&0x0F)<<4 | (p.TD&0x03)<<2
+		if p.TRA {
+			b9 |= 0x02
+		}
+		if p.TOA {
+			b9 |= 0x01
+		}
+		ttr := uint16(math.Round(p.TTR / 0.01))
+		data = append(data, b9,
+			byte(p.TOV>>16), byte(p.TOV>>8), byte(p.TOV),
+			byte(ttr>>8), byte(ttr))
+	}
+	return buf.Write(data)
 }
 
 func (a *AircraftDerivedData) encodeCommunications(buf *bytes.Buffer) (int, error) {
@@ -1008,12 +1094,34 @@ func (a *AircraftDerivedData) encodeCommunications(buf *bytes.Buffer) (int, erro
 	return buf.Write(data)
 }
 
+func (a *AircraftDerivedData) hasADSBStatus() bool {
+	return a.ADSBStatusAC != nil || a.ADSBStatusMN != nil || a.ADSBStatusDC != nil ||
+		a.ADSBStatusGBS != nil || a.ADSBStatusSTAT != nil
+}
+
+// encodeADSBStatus writes subfield #11 (2 octets): AC/MN/DC in bits 16-11,
+// GBS in bit 10, STAT in bits 3-1.
 func (a *AircraftDerivedData) encodeADSBStatus(buf *bytes.Buffer) (int, error) {
-	if a.ADSBStatusAC == nil {
+	if !a.hasADSBStatus() {
 		return 0, nil
 	}
-	// Stub
-	return 0, nil
+	data := make([]byte, 2)
+	if a.ADSBStatusAC != nil {
+		data[0] |= (*a.ADSBStatusAC & 0x03) << 6
+	}
+	if a.ADSBStatusMN != nil {
+		data[0] |= (*a.ADSBStatusMN & 0x03) << 4
+	}
+	if a.ADSBStatusDC != nil {
+		data[0] |= (*a.ADSBStatusDC & 0x03) << 2
+	}
+	if a.ADSBStatusGBS != nil && *a.ADSBStatusGBS {
+		data[0] |= 0x02
+	}
+	if a.ADSBStatusSTAT != nil {
+		data[1] |= *a.ADSBStatusSTAT & 0x07
+	}
+	return buf.Write(data)
 }
 
 func (a *AircraftDerivedData) encodeACASResolutionAdvisory(buf *bytes.Buffer) (int, error) {
@@ -1086,8 +1194,26 @@ func (a *AircraftDerivedData) encodeMeteorologicalData(buf *bytes.Buffer) (int, 
 	if a.MeteorologicalData == nil {
 		return 0, nil
 	}
-	// Stub
-	return 0, nil
+	met := a.MeteorologicalData
+	data := make([]byte, 8)
+	if met.WindSpeed != nil {
+		data[0] |= 0x80
+		data[1], data[2] = byte(*met.WindSpeed>>8), byte(*met.WindSpeed)
+	}
+	if met.WindDirection != nil {
+		data[0] |= 0x40
+		data[3], data[4] = byte(*met.WindDirection>>8), byte(*met.WindDirection)
+	}
+	if met.Temperature != nil {
+		data[0] |= 0x20
+		raw := uint16(int16(math.Round(*met.Temperature / 0.25)))
+		data[5], data[6] = byte(raw>>8), byte(raw)
+	}
+	if met.Turbulence != nil {
+		data[0] |= 0x10
+		data[7] = *met.Turbulence
+	}
+	return buf.Write(data)
 }
 
 func (a *AircraftDerivedData) encodeEmitterCategory(buf *bytes.Buffer) (int, error) {
@@ -1098,11 +1224,14 @@ func (a *AircraftDerivedData) encodeEmitterCategory(buf *bytes.Buffer) (int, err
 }
 
 func (a *AircraftDerivedData) encodePosition(buf *bytes.Buffer) (int, error) {
-	if a.PositionLatitude == nil || a.PositionLongitude == nil {
+	if a.PositionLatitude == nil && a.PositionLongitude == nil {
 		return 0, nil
 	}
-	// Stub
-	return 0, nil
+	if a.PositionLatitude == nil || a.PositionLongitude == nil {
+		return 0, fmt.Errorf("position subfield needs both latitude and longitude")
+	}
+	data := append(encodeLatLon24(*a.PositionLatitude), encodeLatLon24(*a.PositionLongitude)...)
+	return buf.Write(data)
 }
 
 func (a *AircraftDerivedData) encodeGeometricAltitude(buf *bytes.Buffer) (int, error) {
@@ -1124,8 +1253,18 @@ func (a *AircraftDerivedData) encodeModeSMBData(buf *bytes.Buffer) (int, error) 
 	if len(a.ModeSMBData) == 0 {
 		return 0, nil
 	}
-	// Stub
-	return 0, nil
+	if len(a.ModeSMBData) > 255 {
+		return 0, fmt.Errorf("mode S MB data: %d entries exceed the repetition factor maximum of 255", len(a.ModeSMBData))
+	}
+	data := make([]byte, 0, 1+8*len(a.ModeSMBData))
+	data = append(data, byte(len(a.ModeSMBData)))
+	for i, mb := range a.ModeSMBData {
+		if len(mb) != 8 {
+			return 0, fmt.Errorf("mode S MB data entry %d: need 8 bytes (56-bit message + BDS1/BDS2), have %d", i+1, len(mb))
+		}
+		data = append(data, mb...)
+	}
+	return buf.Write(data)
 }
 
 func (a *AircraftDerivedData) encodeIndicatedAirspeedData(buf *bytes.Buffer) (int, error) {
