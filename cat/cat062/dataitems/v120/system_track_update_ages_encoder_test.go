@@ -31,7 +31,7 @@ func TestSystemTrackUpdateAges_EncoderBug(t *testing.T) {
 		},
 		{
 			name:          "2-octet subfield truncated",
-			data:          []byte{0x10, 0x00}, // Bit 12 set (2-octet), only 1 byte provided
+			data:          []byte{0x08, 0x00}, // Bit 4 set (ADS, 2-octet), only 1 byte provided
 			wantDecodeErr: true,
 			description:   "2-octet subfield only has 1 byte",
 		},
@@ -81,28 +81,28 @@ func TestSystemTrackUpdateAges_EncoderBug(t *testing.T) {
 // This documents how Data SHOULD be structured for proper encoding
 func TestSystemTrackUpdateAges_SetDataCorrectly(t *testing.T) {
 	tests := []struct {
-		name        string
-		data        []byte
+		name         string
+		data         []byte
 		canRoundtrip bool
 	}{
 		{
-			name:        "Empty FSPEC",
-			data:        []byte{0x00},
+			name:         "Empty FSPEC",
+			data:         []byte{0x00},
 			canRoundtrip: true,
 		},
 		{
-			name:        "Single subfield properly formed",
-			data:        []byte{0x80, 0x05},
+			name:         "Single subfield properly formed",
+			data:         []byte{0x80, 0x05},
 			canRoundtrip: true,
 		},
 		{
-			name:        "FSPEC with no data (INVALID)",
-			data:        []byte{0x80}, // Claims subfield exists but no data
+			name:         "FSPEC with no data (INVALID)",
+			data:         []byte{0x80}, // Claims subfield exists but no data
 			canRoundtrip: false,
 		},
 		{
-			name:        "Extension with no data (INVALID)",
-			data:        []byte{0x01, 0x80}, // Extension claims subfield but no data
+			name:         "Extension with no data (INVALID)",
+			data:         []byte{0x01, 0x80}, // Extension claims subfield but no data
 			canRoundtrip: false,
 		},
 	}

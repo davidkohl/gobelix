@@ -45,9 +45,11 @@ func (s *SystemTrackUpdateAges) Decode(buf *bytes.Buffer) (int, error) {
 	// First byte - check bits 8-2 (bits 16-10 if counting from 1)
 	for i := 7; i > 0; i-- {
 		if (primaryByte[0] & (1 << i)) != 0 {
-			// Each subfield is 1 octet except subfield #5 which is 2 octets
+			// Each subfield is 1 octet except subfield #5 (ADS, bit 4 of the
+			// first octet, mask 0x08) which is 2 octets. Bit 5 (0x10) is
+			// subfield #4 (MDS), 1 octet.
 			subfieldSize := 1
-			if i == 4 { // Bit 12 = Subfield #5
+			if i == 3 {
 				subfieldSize = 2
 			}
 

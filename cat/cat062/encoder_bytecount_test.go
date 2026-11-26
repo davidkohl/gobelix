@@ -31,48 +31,48 @@ func TestEncoderByteCounts(t *testing.T) {
 		{"I062/136", &cat062.MeasuredFlightLevel{FlightLevel: 350.0}},
 		{"I062/135", &cat062.CalculatedTrackBarometricAltitude{QNH: true, Altitude: 350.0}},
 		{"I062/220", &cat062.CalculatedRateOfClimbDescent{Rate: 1500.0}},
-		
+
 		// Compound items - most likely to have bugs
 		{"I062/380", func() *cat062.AircraftDerivedData {
 			addr := uint32(0x123456)
 			com := uint8(1)
 			stat := uint8(2)
 			return &cat062.AircraftDerivedData{
-				TargetAddress: &addr,
-				CommunicationsCOM: &com,
+				TargetAddress:      &addr,
+				CommunicationsCOM:  &com,
 				CommunicationsSTAT: &stat,
 			}
 		}()},
-		
-		{"I062/290", &cat062.SystemTrackUpdateAges{Data: []byte{0x80, 0x00, 0x05}}},
+
+		{"I062/290", &cat062.SystemTrackUpdateAges{Data: []byte{0x88, 0x05, 0x00, 0x14}}},
 		{"I062/295", &cat062.TrackDataAges{Data: []byte{0x00}}},
-		
+
 		{"I062/500", func() *cat062.EstimatedAccuracies {
 			apcX := uint16(100)
 			apcY := uint16(120)
 			vx := uint8(20)
 			vy := uint8(24)
 			return &cat062.EstimatedAccuracies{
-				APCX: &apcX,
-				APCY: &apcY,
+				APCX:      &apcX,
+				APCY:      &apcY,
 				VelocityX: &vx,
 				VelocityY: &vy,
 			}
 		}()},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
 			startLen := buf.Len()
-			
+
 			n, err := tt.item.Encode(&buf)
 			if err != nil {
 				t.Fatalf("Encode failed: %v", err)
 			}
-			
+
 			actualBytes := buf.Len() - startLen
-			
+
 			if n != actualBytes {
 				t.Errorf("❌ BYTE COUNT MISMATCH: Encode() returned %d but wrote %d bytes (diff: %+d)",
 					n, actualBytes, actualBytes-n)

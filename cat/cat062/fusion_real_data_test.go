@@ -19,16 +19,14 @@ func TestFusionRealData(t *testing.T) {
 		errMsg  string
 	}{
 		{
-			name:    "Real fusion message #1 - I062/220 EOF error",
+			name:    "Real fusion message #1 - formerly I062/220 EOF error",
 			hexData: "3E0056BFFFED066401015D1A2E0083AAA30012C7C5F803CEF036F5039FFDFBFDFF0A9600154237C31820C101010004012B154237C318201B5283010130B0000000000005C705C70002C400C800C6FF6F4D4B84640528",
-			wantErr: true,
-			errMsg:  "I062/220",
+			wantErr: false, // misread I062/290 (MDS as 2 octets) used to shift the record
 		},
 		{
-			name:    "Real fusion message #2 - I062/500 ATV buffer too short",
+			name:    "Real fusion message #2 - formerly I062/500 ATV buffer too short",
 			hexData: "3E0056BFFFED066401015D1A2F008E9F4B001D3BC0009AE7FD1579FCDBFF830E000200005161B2D995A0C101010039DE475161B2D995A0CB2483010130B12000040400000005C805C8000084001400142A2484622528",
-			wantErr: true,
-			errMsg:  "I062/500",
+			wantErr: false,
 		},
 	}
 

@@ -9,9 +9,15 @@ import (
 	v120 "github.com/davidkohl/gobelix/cat/cat062/dataitems/v120"
 )
 
-// TestDecodeI380FromFusionMessage extracts and decodes I062/380 from real fusion message
+// TestDecodeI380FromFusionMessage decodes I062/380 out of a real fusion
+// message and checks it consumes exactly the item's length.
+//
+// The item starts at offset 42 with the primary subfield C1 01 01 00:
+// octet 1 announces ADR and ID, octets 2 and 3 carry only FX, octet 4 is
+// empty. That makes the item 4 + 3 + 6 = 13 octets. The bytes that follow
+// (0EF6 03010130 ...) are I062/040, I062/080 and the rest of the record, not
+// part of I062/380; an earlier version of this test assumed 31 octets.
 func TestDecodeI380FromFusionMessage(t *testing.T) {
-	// Real message from fusion
 	hexData := "3E0056BFFFED066401016D32EE008271240023976605F3F7EEAD5603C8FC5114EA0A900014C673C78820C10101007380C714C673C788200EF603010130B0020202400006170617FFFDC401720171DCC4B7B784622A28"
 
 	data, err := hex.DecodeString(hexData)
@@ -19,93 +25,40 @@ func TestDecodeI380FromFusionMessage(t *testing.T) {
 		t.Fatalf("Failed to decode hex: %v", err)
 	}
 
-	// I062/380 starts at offset 42 (confirmed by manual decode)
-	// I062/380 bytes (31 total): c10101007380c714c673c788200ef603010130b0020202400006170617fffd
-	i380Offset := 42
-	i380Bytes := data[i380Offset : i380Offset+31]
+	const i380Offset = 42
+	const i380Len = 13
+	want := data[i380Offset : i380Offset+i380Len]
 
-	t.Logf("I062/380 hex: %s", hex.EncodeToString(i380Bytes))
-	t.Logf("I062/380 length: %d bytes", len(i380Bytes))
-
-	// Manually decode FSPEC
-	t.Logf("\n=== FSPEC Analysis ===")
-	t.Logf("Byte 1: 0x%02X (%08b)", i380Bytes[0], i380Bytes[0])
-	t.Logf("Byte 2: 0x%02X (%08b)", i380Bytes[1], i380Bytes[1])
-	t.Logf("Byte 3: 0x%02X (%08b)", i380Bytes[2], i380Bytes[2])
-	t.Logf("Byte 4: 0x%02X (%08b)", i380Bytes[3], i380Bytes[3])
-
-	// Decode with gobelix
-	t.Logf("\n=== Decoding with gobelix ===")
 	item := &v120.AircraftDerivedData{}
-	buf := bytes.NewBuffer(i380Bytes)
-
-	bytesRead, err := item.Decode(buf)
+	buf := bytes.NewBuffer(data[i380Offset:])
+	n, err := item.Decode(buf)
 	if err != nil {
-		t.Logf("❌ Decode error: %v", err)
-		t.Logf("Bytes read before error: %d", bytesRead)
-	} else {
-		t.Logf("✅ Decode succeeded! Read %d bytes", bytesRead)
-
-		if item.TargetAddress != nil {
-			t.Logf("Target Address: 0x%06X", *item.TargetAddress)
-		}
-		if item.TargetIdentification != nil {
-			t.Logf("Target Identification: %s", *item.TargetIdentification)
-		}
-		if item.MagneticHeading != nil {
-			t.Logf("Magnetic Heading: %.2f°", *item.MagneticHeading)
-		}
-		if item.GroundSpeed != nil {
-			t.Logf("Ground Speed: %.1f kt", *item.GroundSpeed)
-		}
+		t.Fatalf("Decode() error = %v", err)
+	}
+	if n != i380Len {
+		t.Fatalf("Decode() consumed %d bytes, want %d (%x)", n, i380Len, want)
 	}
 
-	// Check if all 31 bytes were consumed
-	if bytesRead != 31 {
-		t.Errorf("Expected to consume 31 bytes, but consumed %d bytes", bytesRead)
-		t.Logf("Remaining bytes in buffer: %d", buf.Len())
-		if buf.Len() > 0 {
-			remaining := make([]byte, buf.Len())
-			buf.Read(remaining)
-			t.Logf("Remaining bytes: %s", hex.EncodeToString(remaining))
-		}
+	// The next item in the record is I062/040 (track number 0x0EF6).
+	if next := buf.Bytes()[:2]; !bytes.Equal(next, []byte{0x0E, 0xF6}) {
+		t.Errorf("bytes after I062/380 = %x, want 0ef6 (I062/040)", next)
 	}
 
-	// Manual subfield decode based on FSPEC
-	t.Logf("\n=== Manual Subfield Decode ===")
-
-	// FSPEC: C1 01 01 00
-	// Byte 1 (C1 = 11000001): bits 7,6 set + FX
-	// → Subfield #1 (Target Address) and Subfield #2 (Target ID) present
-
-	offset := 4 // After FSPEC
-
-	// Subfield #1: Target Address (3 bytes)
-	if (i380Bytes[0] & 0x80) != 0 {
-		addr := uint32(i380Bytes[offset])<<16 | uint32(i380Bytes[offset+1])<<8 | uint32(i380Bytes[offset+2])
-		t.Logf("Subfield #1 (Target Address): 0x%06X (%d bytes)", addr, 3)
-		offset += 3
+	if item.TargetAddress == nil || *item.TargetAddress != 0x7380C7 {
+		t.Errorf("TargetAddress = %v, want 0x7380C7", item.TargetAddress)
+	}
+	if item.TargetIdentification == nil || *item.TargetIdentification != "ELY318" {
+		t.Errorf("TargetIdentification = %v, want ELY318", item.TargetIdentification)
 	}
 
-	// Subfield #2: Target Identification (6 bytes)
-	if (i380Bytes[0] & 0x40) != 0 {
-		idBytes := i380Bytes[offset : offset+6]
-		t.Logf("Subfield #2 (Target ID): %s (%d bytes)", hex.EncodeToString(idBytes), 6)
-		offset += 6
+	// Re-encoding gives the canonical form: the empty trailing primary
+	// subfield octets are dropped, the subfield data is unchanged.
+	var out bytes.Buffer
+	if _, err := item.Encode(&out); err != nil {
+		t.Fatalf("Encode() error = %v", err)
 	}
-
-	t.Logf("\nBytes consumed after subfields #1 and #2: %d", offset)
-	t.Logf("Expected total: 31 bytes")
-	t.Logf("Discrepancy: %d bytes", 31-offset)
-
-	if offset < 31 {
-		t.Logf("\nRemaining bytes after subfield #2:")
-		t.Logf("%s", hex.EncodeToString(i380Bytes[offset:]))
-
-		// These might be additional subfields that shouldn't be there
-		// OR the FSPEC is wrong
-		t.Logf("\nHypothesis: The FSPEC 'C1 01 01 00' might be WRONG.")
-		t.Logf("The actual FSPEC might be longer or different.")
-		t.Logf("Let's check if byte 4 is actually part of subfield data, not FSPEC...")
+	canonical := append([]byte{0xC0}, want[4:]...)
+	if !bytes.Equal(out.Bytes(), canonical) {
+		t.Errorf("Encode() = %x, want %x", out.Bytes(), canonical)
 	}
 }
