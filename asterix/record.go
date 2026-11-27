@@ -60,7 +60,30 @@ func (r *Record) SetDataItem(id string, item DataItem) error {
 	}
 
 	r.items[id] = item
+	if sel, ok := r.uap.(RecordUAPSelector); ok {
+		// The FRN depends on the layout the items select (CAT001 TYP):
+		// keep the FSPEC that of the selected layout after every change.
+		r.fspec = selectedFSPEC(sel, r.items)
+		return nil
+	}
 	return r.fspec.SetFRN(field.FRN)
+}
+
+// selectedFSPEC returns the FSPEC of items in the layout that sel selects
+// for them. Items that the layout does not define are left out; Encode
+// reports them.
+func selectedFSPEC(sel RecordUAPSelector, items map[string]DataItem) *FSPEC {
+	fspec := NewFSPEC()
+	uap, err := sel.SelectEncodeUAP(items)
+	if err != nil {
+		uap = sel
+	}
+	for id := range items {
+		if f, ok := uap.GetFieldByDataItem(id); ok {
+			_ = fspec.SetFRN(f.FRN) // FRN 0 is refused by NewBaseUAP
+		}
+	}
+	return fspec
 }
 
 // GetDataItem retrieves a data item by its ID
@@ -86,17 +109,19 @@ type RecordUAPSelector interface {
 	SelectEncodeUAP(items map[string]DataItem) (UAP, error)
 }
 
-// encodeUAP returns the UAP that lays out this record when it is encoded.
-func (r *Record) encodeUAP() (UAP, error) {
+// encodeUAP returns the UAP that lays out this record when it is encoded,
+// and whether it was chosen by a RecordUAPSelector.
+func (r *Record) encodeUAP() (UAP, bool, error) {
 	if sel, ok := r.uap.(RecordUAPSelector); ok {
-		return sel.SelectEncodeUAP(r.items)
+		uap, err := sel.SelectEncodeUAP(r.items)
+		return uap, true, err
 	}
-	return r.uap, nil
+	return r.uap, false, nil
 }
 
 // Encode writes the record to a buffer
 func (r *Record) Encode(buf *bytes.Buffer) (int, error) {
-	uap, err := r.encodeUAP()
+	uap, selected, err := r.encodeUAP()
 	if err != nil {
 		return 0, err
 	}
@@ -106,7 +131,10 @@ func (r *Record) Encode(buf *bytes.Buffer) (int, error) {
 		return 0, err
 	}
 
-	if uap != r.uap {
+	// No comparison of the two UAP interface values here: that panics for
+	// a UAP whose dynamic type is not comparable (a struct value holding a
+	// slice or map).
+	if selected {
 		// FRNs depend on the selected layout: rebuild the FSPEC against it.
 		fspec := NewFSPEC()
 		for id := range r.items {
@@ -462,7 +490,7 @@ func (r *Record) HasDataItem(id string) bool {
 func (r *Record) EstimateSize() int {
 	size := r.fspec.Size() // FSPEC size
 
-	uap, err := r.encodeUAP()
+	uap, _, err := r.encodeUAP()
 	if err != nil {
 		uap = r.uap
 	}

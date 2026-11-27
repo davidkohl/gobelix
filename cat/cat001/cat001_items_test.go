@@ -424,3 +424,29 @@ func TestCat001SpareFSPECBitFails(t *testing.T) {
 		}
 	}
 }
+
+// SetDataItem keeps the FSPEC in the layout the items select, whatever the
+// order of the calls, so FSPEC and EstimateSize agree with Encode.
+func TestCat001TrackRecordFSPECBeforeEncode(t *testing.T) {
+	u, _ := uap.NewUAP12()
+	rec, _ := asterix.NewRecord(asterix.Cat001, u)
+	// I001/040 is FRN 3 in the plot layout and FRN 4 in the track layout.
+	_ = rec.SetDataItem("I001/040", &v12.PositionPolar{RHO: 50.5, THETA: 90})
+	_ = rec.SetDataItem("I001/161", &v12.TrackPlotNumber{Number: 0x1234})
+	_ = rec.SetDataItem("I001/010", &common.DataSourceIdentifier{SAC: 0x32, SIC: 0x02})
+	_ = rec.SetDataItem("I001/020", &v12.TargetReportDescriptor{TYP: v12.TYPTrack, SSR: true, PSR: true})
+	fs := rec.FSPEC()
+	if fs.ToUint64() != 0x0F {
+		t.Fatalf("FSPEC %v, want track FRNs 1-4", fs)
+	}
+	var buf bytes.Buffer
+	if _, err := rec.Encode(&buf); err != nil {
+		t.Fatal(err)
+	}
+	if want := []byte{0xF0, 0x32, 0x02, 0xB0, 0x12, 0x34, 0x19, 0x40, 0x40, 0x00}; !bytes.Equal(buf.Bytes(), want) {
+		t.Fatalf("got % X, want % X", buf.Bytes(), want)
+	}
+	if est := rec.EstimateSize(); est < buf.Len() {
+		t.Errorf("EstimateSize %d < encoded %d", est, buf.Len())
+	}
+}

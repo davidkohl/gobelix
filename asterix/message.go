@@ -68,9 +68,15 @@ func (m *AsterixMessage) String() string {
 		sb.WriteString(fmt.Sprintf("Record #%d:\n", i+1))
 
 		if m.uap != nil {
-			fields := m.uap.Fields()
-
-			// Sort fields by FRN
+			// The layout of this record (a RecordUAPSelector picks it per
+			// record). Sort a copy: Fields is the UAP's shared slice.
+			uap := m.uap
+			if sel, ok := uap.(RecordUAPSelector); ok {
+				if u, err := sel.SelectEncodeUAP(record); err == nil {
+					uap = u
+				}
+			}
+			fields := append([]DataField(nil), uap.Fields()...)
 			sort.Slice(fields, func(i, j int) bool {
 				return fields[i].FRN < fields[j].FRN
 			})

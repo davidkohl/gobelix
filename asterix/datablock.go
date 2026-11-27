@@ -374,7 +374,7 @@ func (db *DataBlock) String() string {
 		// The layout of this record (a RecordUAPSelector picks it per record)
 		uap := db.uap
 		if uap != nil {
-			if u, err := record.encodeUAP(); err == nil {
+			if u, _, err := record.encodeUAP(); err == nil {
 				uap = u
 			}
 		}
