@@ -77,7 +77,7 @@ func (u *UAP13) Validate(items map[string]asterix.DataItem) error {
 	return nil
 }
 
-// cat023Fields defines the complete UAP for Category 023 v1.3
+// cat023Fields defines the standard UAP of CAT023 ed 1.3 (§5.3.1, Table 3)
 var cat023Fields = []asterix.DataField{
 	{
 		FRN:         1,
@@ -135,31 +135,31 @@ var cat023Fields = []asterix.DataField{
 		Length:      1,
 		Mandatory:   false,
 	},
-	// FRN 8-13 spare
+	// FX
 	{
-		FRN:         14,
+		FRN:         8,
 		DataItem:    "I023/110",
 		Description: "Service Status",
-		Type:        asterix.Compound,
+		Type:        asterix.Extended,
 		Mandatory:   false,
 	},
 	{
-		FRN:         15,
+		FRN:         9,
 		DataItem:    "I023/120",
 		Description: "Service Statistics",
-		Type:        asterix.Compound,
+		Type:        asterix.Repetitive,
 		Mandatory:   false,
 	},
-	// FRN 16-20 spare
+	// FRN 10-12 spare
 	{
-		FRN:         21,
+		FRN:         13,
 		DataItem:    "RE023",
 		Description: "Reserved Expansion Field",
 		Type:        asterix.Explicit,
 		Mandatory:   false,
 	},
 	{
-		FRN:         22,
+		FRN:         14,
 		DataItem:    "SP023",
 		Description: "Special Purpose Field",
 		Type:        asterix.Explicit,

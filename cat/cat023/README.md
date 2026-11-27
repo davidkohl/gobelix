@@ -31,8 +31,10 @@ The implementation follows the ASTERIX Category 023 specification version 1.3. I
 | 5   | I023/100   | Ground Station Status           | Extended | 1+     | No        |
 | 6   | I023/101   | Service Configuration           | Extended | 1+     | No        |
 | 7   | I023/200   | Operational Range               | Fixed    | 1      | No        |
-| 8   | I023/110   | Service Status                  | Fixed    | 1      | No        |
-| 9   | I023/120   | Service Statistics              | Repetitive | 1+   | No        |
+| 8   | I023/110   | Service Status                  | Extended | 1+     | No        |
+| 9   | I023/120   | Service Statistics              | Repetitive | 1+6n | No        |
+| 13  | RE023      | Reserved Expansion Field        | Explicit | 1+     | No        |
+| 14  | SP023      | Special Purpose Field           | Explicit | 1+     | No        |
 
 ## Report Types
 

@@ -9,120 +9,101 @@ import (
 	"github.com/davidkohl/gobelix/asterix"
 )
 
-// ServiceStatistics represents I023/120 - Service Statistics
-// Compound data item with optional subfields
+// ServiceStatistics represents I023/120 - Service Statistics (CAT023 ed 1.3
+// §5.2.8). Repetitive item: REP, then REP blocks of six octets:
+//
+//	TYPE (8 bits) | REF (1 bit) spare (7 bits) | COUNTER VALUE (32 bits)
 type ServiceStatistics struct {
-	// Subfield #1: TYPE - Type of report counter
+	// Entries holds one counter block per repetition.
+	Entries []ServiceStatisticsEntry
+
+	// Deprecated: TYPE, REF and CV are the pre-ed-1.3-layout view kept for
+	// compatibility. After Decode, TYPE and REF are those of the first entry
+	// and CV holds every counter. Encode uses them only when Entries is
+	// empty: one block per CV, each with TYPE and REF.
 	TYPE *TYPEValue
-
-	// Subfield #2: REF - Reference from which the messages are countered
-	REF *REFValue
-
-	// Subfield #3: Counter Value (Counters)
-	CV []CounterValue
+	REF  *REFValue
+	CV   []CounterValue
 }
 
-// TYPEValue represents the TYPE subfield (1 byte)
+// ServiceStatisticsEntry is one I023/120 counter block.
+type ServiceStatisticsEntry struct {
+	// Type of report counter: 0 unknown messages, 1 'too old' messages,
+	// 2 failed conversions, 3 total received, 4 total transmitted,
+	// 20 TIS-B management, 21 Basic, 22 High Dynamic, 23 Full Position,
+	// 24 Basic Ground, 25 TCP, 26 UTC time, 27 Data, 28 High Resolution,
+	// 29 Aircraft Target Airborne, 30 Aircraft Target Ground,
+	// 31 Ground Vehicle Target, 32 2-slots TCP.
+	Type uint8
+	// Ref is the counting reference: false from midnight, true from the
+	// last report.
+	Ref bool
+	// Counter is the 32-bit counter value.
+	Counter uint32
+}
+
+// TYPEValue is the TYPE of the first counter block (deprecated view).
 type TYPEValue struct {
-	TYPE uint8 // 8-bit type: 1=Number of unknown messages, 2=Number of too old messages, 3=Number of failed messages, etc.
+	TYPE uint8
 }
 
-// REFValue represents the REF subfield (1 byte)
+// REFValue is the REF of the first counter block (deprecated view).
 type REFValue struct {
-	REF bool // 0=From midnight, 1=From last report
+	REF bool // false: from midnight, true: from the last report
 }
 
-// CounterValue represents a single counter (repetitive, 3 bytes each)
+// CounterValue is one counter value (deprecated view).
 type CounterValue struct {
-	Counter uint32 // 24-bit counter value
+	Counter uint32
 }
 
 // Decode decodes the Service Statistics from bytes
 func (s *ServiceStatistics) Decode(buf *bytes.Buffer) (int, error) {
-	bytesRead := 0
-
-	// Read primary subfield (1 octet with FX extension bit)
-	primaryBytes := make([]byte, 0, 1)
-	for {
-		b, err := buf.ReadByte()
-		if err != nil {
-			return bytesRead, fmt.Errorf("%w: reading service statistics primary subfield", asterix.ErrBufferTooShort)
-		}
-		bytesRead++
-		primaryBytes = append(primaryBytes, b)
-
-		// Check if there's an extension
-		hasExtension := (b & 0x01) != 0
-		if !hasExtension {
-			break
-		}
+	*s = ServiceStatistics{}
+	rep, err := buf.ReadByte()
+	if err != nil {
+		return 0, fmt.Errorf("%w: reading I023/120 REP", asterix.ErrBufferTooShort)
 	}
-
-	// Now read subfields based on the bits set in the primary subfield
-	subfieldIndex := 0
-	for byteIdx := 0; byteIdx < len(primaryBytes); byteIdx++ {
-		// Process bits 8-2 (bit 1 is FX)
-		for bitPos := 7; bitPos >= 1; bitPos-- {
-			if (primaryBytes[byteIdx] & (1 << bitPos)) != 0 {
-				// This subfield is present
-				n, err := s.decodeSubfield(subfieldIndex, buf)
-				bytesRead += n
-				if err != nil {
-					return bytesRead, fmt.Errorf("decoding subfield #%d: %w", subfieldIndex+1, err)
-				}
-			}
-			subfieldIndex++
-		}
+	n := 1
+	if buf.Len() < int(rep)*6 {
+		return n, fmt.Errorf("%w: I023/120 REP %d needs %d octets, have %d", asterix.ErrBufferTooShort, rep, int(rep)*6, buf.Len())
 	}
-
-	return bytesRead, nil
+	s.Entries = make([]ServiceStatisticsEntry, rep)
+	s.CV = make([]CounterValue, rep)
+	for i := range s.Entries {
+		b := buf.Next(6)
+		n += 6
+		e := ServiceStatisticsEntry{
+			Type:    b[0],
+			Ref:     b[1]&0x80 != 0,
+			Counter: uint32(b[2])<<24 | uint32(b[3])<<16 | uint32(b[4])<<8 | uint32(b[5]),
+		}
+		s.Entries[i] = e
+		s.CV[i] = CounterValue{Counter: e.Counter}
+	}
+	if rep > 0 {
+		s.TYPE = &TYPEValue{TYPE: s.Entries[0].Type}
+		s.REF = &REFValue{REF: s.Entries[0].Ref}
+	}
+	return n, nil
 }
 
-// decodeSubfield decodes a specific subfield based on index
-func (s *ServiceStatistics) decodeSubfield(index int, buf *bytes.Buffer) (int, error) {
-	switch index {
-	case 0: // #1: TYPE
-		b, err := buf.ReadByte()
-		if err != nil {
-			return 0, fmt.Errorf("%w: reading TYPE subfield", asterix.ErrBufferTooShort)
-		}
-		s.TYPE = &TYPEValue{TYPE: b}
-		return 1, nil
-
-	case 1: // #2: REF
-		b, err := buf.ReadByte()
-		if err != nil {
-			return 0, fmt.Errorf("%w: reading REF subfield", asterix.ErrBufferTooShort)
-		}
-		s.REF = &REFValue{REF: (b & 0x80) != 0}
-		return 1, nil
-
-	case 2: // #3: CV - Counter Values (Repetitive)
-		// Read repetition factor
-		rep, err := buf.ReadByte()
-		if err != nil {
-			return 0, fmt.Errorf("%w: reading counter value repetition factor", asterix.ErrBufferTooShort)
-		}
-		bytesRead := 1
-
-		s.CV = make([]CounterValue, rep)
-		for i := 0; i < int(rep); i++ {
-			var counterData [3]byte
-			n, err := buf.Read(counterData[:])
-			if err != nil || n != 3 {
-				return bytesRead + n, fmt.Errorf("%w: reading counter value %d", asterix.ErrBufferTooShort, i+1)
-			}
-			bytesRead += n
-
-			// Decode 24-bit counter
-			counter := uint32(counterData[0])<<16 | uint32(counterData[1])<<8 | uint32(counterData[2])
-			s.CV[i] = CounterValue{Counter: counter}
-		}
-		return bytesRead, nil
-
-	default:
-		return 0, fmt.Errorf("unknown service statistics subfield index: %d", index)
+// entries returns the blocks to encode.
+func (s *ServiceStatistics) entries() []ServiceStatisticsEntry {
+	if len(s.Entries) > 0 {
+		return s.Entries
 	}
+	out := make([]ServiceStatisticsEntry, len(s.CV))
+	for i, cv := range s.CV {
+		out[i].Counter = cv.Counter
+		if s.TYPE != nil {
+			out[i].Type = s.TYPE.TYPE
+		}
+		if s.REF != nil {
+			out[i].Ref = s.REF.REF
+		}
+	}
+	return out
 }
 
 // Encode encodes the Service Statistics to bytes
@@ -130,162 +111,45 @@ func (s *ServiceStatistics) Encode(buf *bytes.Buffer) (int, error) {
 	if err := s.Validate(); err != nil {
 		return 0, err
 	}
-
-	// Build primary subfield based on which fields are present
-	primaryBytes := s.buildPrimarySubfield()
-	n, err := buf.Write(primaryBytes)
+	entries := s.entries()
+	out := make([]byte, 1, 1+6*len(entries))
+	out[0] = byte(len(entries))
+	for _, e := range entries {
+		var ref byte
+		if e.Ref {
+			ref = 0x80
+		}
+		out = append(out, e.Type, ref,
+			byte(e.Counter>>24), byte(e.Counter>>16), byte(e.Counter>>8), byte(e.Counter))
+	}
+	n, err := buf.Write(out)
 	if err != nil {
-		return n, fmt.Errorf("writing service statistics primary subfield: %w", err)
+		return n, fmt.Errorf("writing I023/120: %w", err)
 	}
-	bytesWritten := n
-
-	// Encode each present subfield
-	encoders := []func(*bytes.Buffer) (int, error){
-		s.encodeTYPE,
-		s.encodeREF,
-		s.encodeCV,
-	}
-
-	for _, encoder := range encoders {
-		n, err := encoder(buf)
-		bytesWritten += n
-		if err != nil {
-			return bytesWritten, err
-		}
-	}
-
-	return bytesWritten, nil
-}
-
-// buildPrimarySubfield builds the FSPEC for compound data item
-func (s *ServiceStatistics) buildPrimarySubfield() []byte {
-	// Determine which subfields are present
-	presence := []bool{
-		s.TYPE != nil,
-		s.REF != nil,
-		len(s.CV) > 0,
-	}
-
-	// Build primary subfield byte
-	var b byte
-	if presence[0] {
-		b |= 0x80 // bit 8
-	}
-	if presence[1] {
-		b |= 0x40 // bit 7
-	}
-	if presence[2] {
-		b |= 0x20 // bit 6
-	}
-	// FX bit is 0 (no further extensions needed for now)
-
-	return []byte{b}
-}
-
-// Individual subfield encoders
-func (s *ServiceStatistics) encodeTYPE(buf *bytes.Buffer) (int, error) {
-	if s.TYPE == nil {
-		return 0, nil
-	}
-	return buf.Write([]byte{s.TYPE.TYPE})
-}
-
-func (s *ServiceStatistics) encodeREF(buf *bytes.Buffer) (int, error) {
-	if s.REF == nil {
-		return 0, nil
-	}
-	var b byte
-	if s.REF.REF {
-		b = 0x80
-	}
-	return buf.Write([]byte{b})
-}
-
-func (s *ServiceStatistics) encodeCV(buf *bytes.Buffer) (int, error) {
-	if len(s.CV) == 0 {
-		return 0, nil
-	}
-
-	// Write repetition factor
-	n, err := buf.Write([]byte{byte(len(s.CV))})
-	if err != nil {
-		return n, err
-	}
-	bytesWritten := n
-
-	// Write each counter
-	for i := range s.CV {
-		counter := s.CV[i].Counter
-		data := []byte{
-			byte(counter >> 16),
-			byte(counter >> 8),
-			byte(counter),
-		}
-		n, err := buf.Write(data)
-		bytesWritten += n
-		if err != nil {
-			return bytesWritten, err
-		}
-	}
-
-	return bytesWritten, nil
+	return n, nil
 }
 
 // Validate validates the Service Statistics
 func (s *ServiceStatistics) Validate() error {
-	// TYPE values should be reasonable (1-255)
-	if s.TYPE != nil && s.TYPE.TYPE == 0 {
-		return fmt.Errorf("%w: TYPE value should not be 0", asterix.ErrInvalidMessage)
+	if len(s.entries()) > 255 {
+		return fmt.Errorf("%w: I023/120 holds at most 255 counters, got %d", asterix.ErrInvalidMessage, len(s.entries()))
 	}
-
-	// Counter values should fit in 24 bits
-	for i, cv := range s.CV {
-		if cv.Counter > 0xFFFFFF {
-			return fmt.Errorf("%w: counter value %d exceeds 24-bit limit: %d", asterix.ErrInvalidMessage, i, cv.Counter)
-		}
-	}
-
 	return nil
 }
 
 // String returns a string representation
 func (s *ServiceStatistics) String() string {
-	var parts []string
-
-	if s.TYPE != nil {
-		typeDesc := map[uint8]string{
-			1: "Unknown Messages",
-			2: "Too Old Messages",
-			3: "Failed Messages",
-			4: "Total Messages",
-			5: "Total Corrected Messages",
-		}
-		if desc, ok := typeDesc[s.TYPE.TYPE]; ok {
-			parts = append(parts, fmt.Sprintf("Type:%s", desc))
-		} else {
-			parts = append(parts, fmt.Sprintf("Type:%d", s.TYPE.TYPE))
-		}
-	}
-
-	if s.REF != nil {
-		if s.REF.REF {
-			parts = append(parts, "Ref:Last Report")
-		} else {
-			parts = append(parts, "Ref:Midnight")
-		}
-	}
-
-	if len(s.CV) > 0 {
-		var counters []string
-		for _, cv := range s.CV {
-			counters = append(counters, fmt.Sprintf("%d", cv.Counter))
-		}
-		parts = append(parts, fmt.Sprintf("Counters:[%s]", strings.Join(counters, ", ")))
-	}
-
-	if len(parts) == 0 {
+	entries := s.entries()
+	if len(entries) == 0 {
 		return "ServiceStatistics{}"
 	}
-
+	parts := make([]string, len(entries))
+	for i, e := range entries {
+		ref := "midnight"
+		if e.Ref {
+			ref = "last report"
+		}
+		parts[i] = fmt.Sprintf("type %d since %s: %d", e.Type, ref, e.Counter)
+	}
 	return fmt.Sprintf("ServiceStatistics{%s}", strings.Join(parts, ", "))
 }
