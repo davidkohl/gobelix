@@ -34,16 +34,16 @@ func (c *CommunicationsCapability) Decode(buf *bytes.Buffer) (int, error) {
 	}
 
 	// Octet 1 (data[0]): COM(bits 7-5) STAT(bits 4-2) CASEVN(bits 1-0)
-	c.COM = (data[0] >> 5) & 0x07    // bits 16-14
-	c.STAT = (data[0] >> 2) & 0x07   // bits 13-11
-	c.CASEVN = data[0] & 0x03        // bits 10-9
+	c.COM = (data[0] >> 5) & 0x07  // bits 16-14
+	c.STAT = (data[0] >> 2) & 0x07 // bits 13-11
+	c.CASEVN = data[0] & 0x03      // bits 10-9
 
 	// Octet 2 (data[1]): MSSC(bit 7) ARC(bit 6) AIC(bit 5) B1A(bit 4) B1B(bits 3-0)
-	c.MSSC = (data[1] & 0x80) != 0   // bit 8
-	c.ARC = (data[1] & 0x40) != 0    // bit 7
-	c.AIC = (data[1] & 0x20) != 0    // bit 6
-	c.B1A = (data[1] & 0x10) != 0    // bit 5
-	c.B1B = data[1] & 0x0F           // bits 4-1
+	c.MSSC = (data[1] & 0x80) != 0 // bit 8
+	c.ARC = (data[1] & 0x40) != 0  // bit 7
+	c.AIC = (data[1] & 0x20) != 0  // bit 6
+	c.B1A = (data[1] & 0x10) != 0  // bit 5
+	c.B1B = data[1] & 0x0F         // bits 4-1
 
 	return n, nil
 }

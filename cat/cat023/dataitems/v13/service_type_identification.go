@@ -30,8 +30,8 @@ func (s *ServiceTypeIdentification) Decode(buf *bytes.Buffer) (int, error) {
 		return 0, fmt.Errorf("%w: reading service type identification", asterix.ErrBufferTooShort)
 	}
 
-	s.SID = (b >> 4) & 0x0F   // bits 8-5 (upper nibble)
-	s.STYPE = b & 0x0F        // bits 4-1 (lower nibble)
+	s.SID = (b >> 4) & 0x0F // bits 8-5 (upper nibble)
+	s.STYPE = b & 0x0F      // bits 4-1 (lower nibble)
 
 	return 1, nil
 }

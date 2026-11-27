@@ -62,7 +62,7 @@ func (s *ServiceConfiguration) Decode(buf *bytes.Buffer) (int, error) {
 		bytesRead++
 
 		s.SSRP = (b >> 1) & 0x7F // bits 8-2 (7 bits)
-		fx = (b & 0x01) != 0      // Check FX bit for next extension
+		fx = (b & 0x01) != 0     // Check FX bit for next extension
 	}
 
 	// Read any additional extension octets (spare in v1.3)

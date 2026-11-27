@@ -12,8 +12,8 @@ import (
 // SelectedAltitude implements I021/146
 // Selected Altitude (Mode Control Panel/Flight Control Unit) (2 octets)
 type SelectedAltitude struct {
-	SAS    bool  // Source information provided
-	Source uint8 // 0=Unknown, 1=Aircraft, 2=FCU/MCP, 3=FMS
+	SAS    bool    // Source information provided
+	Source uint8   // 0=Unknown, 1=Aircraft, 2=FCU/MCP, 3=FMS
 	Alt    float64 // Altitude in feet (13-bit raw, LSB 25 ft: range ±102,375 ft)
 }
 
@@ -43,7 +43,7 @@ func (s *SelectedAltitude) Encode(buf *bytes.Buffer) (int, error) {
 	// Two's complement is automatically handled by uint16 cast
 	rawUnsigned := uint16(raw) & 0x1FFF
 	data[0] |= byte((rawUnsigned >> 8) & 0x1F) // Upper 5 bits
-	data[1] = byte(rawUnsigned)                 // Lower 8 bits
+	data[1] = byte(rawUnsigned)                // Lower 8 bits
 
 	n, err := buf.Write(data[:])
 	if err != nil {

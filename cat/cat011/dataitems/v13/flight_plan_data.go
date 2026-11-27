@@ -29,19 +29,19 @@ type FlightPlanRelatedData struct {
 	HasSTS bool // Stand Status
 
 	// Subfield values
-	TAG FPPSTag       // SAC/SIC of FPPS
-	CSN string        // Callsign (7 chars)
-	IFI IFPSFlightID  // IFPS Flight ID
+	TAG FPPSTag      // SAC/SIC of FPPS
+	CSN string       // Callsign (7 chars)
+	IFI IFPSFlightID // IFPS Flight ID
 	FCT FlightCategory
-	TAC string        // Type of Aircraft (4 chars)
-	WTC byte          // Wake Turbulence Category (L/M/H/J)
-	DEP string        // Departure Airport (4 chars)
-	DST string        // Destination Airport (4 chars)
-	RDS RunwayDesig   // Runway Designation
-	CFL float64       // Current Cleared FL (LSB = 1/4 FL)
-	CTL ControlPos    // Current Control Position
-	TOD []TimeOfDep   // Time of Departure (repetitive)
-	AST string        // Aircraft Stand (6 chars)
+	TAC string      // Type of Aircraft (4 chars)
+	WTC byte        // Wake Turbulence Category (L/M/H/J)
+	DEP string      // Departure Airport (4 chars)
+	DST string      // Destination Airport (4 chars)
+	RDS RunwayDesig // Runway Designation
+	CFL float64     // Current Cleared FL (LSB = 1/4 FL)
+	CTL ControlPos  // Current Control Position
+	TOD []TimeOfDep // Time of Departure (repetitive)
+	AST string      // Aircraft Stand (6 chars)
 	STS StandStatus
 }
 

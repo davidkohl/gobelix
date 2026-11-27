@@ -12,9 +12,9 @@ import (
 // AirborneGroundVector implements I021/160
 // Airborne Ground Vector (4 octets)
 type AirborneGroundVector struct {
-	RE           bool    // Range Exceeded Indicator
-	GroundSpeed  float64 // Ground speed in knots, LSB = 2^-14 NM/s
-	TrackAngle   float64 // Track angle in degrees, LSB = 360/2^16
+	RE          bool    // Range Exceeded Indicator
+	GroundSpeed float64 // Ground speed in knots, LSB = 2^-14 NM/s
+	TrackAngle  float64 // Track angle in degrees, LSB = 360/2^16
 }
 
 func (a *AirborneGroundVector) Encode(buf *bytes.Buffer) (int, error) {

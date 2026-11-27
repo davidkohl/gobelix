@@ -140,7 +140,7 @@ func (f *FSPEC) Decode(r io.Reader) (int, error) {
 	f.size = 1
 
 	// Read extension bytes as needed
-	for *f.dataPtr(f.size-1)&0x01 != 0 {
+	for *f.dataPtr(f.size - 1)&0x01 != 0 {
 		// Safety check to prevent malformed data causing excessive reads
 		if f.size >= 8 {
 			return f.size, fmt.Errorf("invalid FSPEC: too many extension bytes")
@@ -176,7 +176,7 @@ func (f *FSPEC) DecodeFromBytes(data []byte, offset int) (int, error) {
 	bytesRead := 1
 
 	// Read extension bytes as needed
-	for *f.dataPtr(f.size-1)&0x01 != 0 {
+	for *f.dataPtr(f.size - 1)&0x01 != 0 {
 		// Check if we have more data
 		if offset+bytesRead >= len(data) {
 			return bytesRead, fmt.Errorf("unexpected end of data in FSPEC")
@@ -196,7 +196,7 @@ func (f *FSPEC) DecodeFromBytes(data []byte, offset int) (int, error) {
 		bytesRead++
 
 		// Stop if this byte doesn't have the FX bit set
-		if *f.dataPtr(f.size-1)&0x01 == 0 {
+		if *f.dataPtr(f.size - 1)&0x01 == 0 {
 			break
 		}
 	}

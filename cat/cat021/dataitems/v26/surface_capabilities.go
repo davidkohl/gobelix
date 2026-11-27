@@ -11,14 +11,14 @@ import (
 // Surface Capabilities and Characteristics (Extended, 1+ octets)
 type SurfaceCapabilities struct {
 	// First octet
-	POA  bool  // Position Offset Applied
+	POA   bool // Position Offset Applied
 	CDTIS bool // Cockpit Display of Traffic Information Surface
 	B2Low bool // Class B2 transmit power less than 70 Watts
-	RAS  bool  // Receiving ATC Services
+	RAS   bool // Receiving ATC Services
 	IDENT bool // Setting of IDENT-switch
 
 	// Second octet (extension 1)
-	LW       uint8 // Length/Width code (0-15)
+	LW           uint8 // Length/Width code (0-15)
 	hasExtension bool
 }
 

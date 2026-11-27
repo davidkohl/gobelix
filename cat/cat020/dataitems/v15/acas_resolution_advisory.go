@@ -11,14 +11,14 @@ import (
 // ACASResolutionAdvisory implements I020/260
 // ACAS Resolution Advisory Report (7 octets)
 type ACASResolutionAdvisory struct {
-	TYP uint8    // Type of threat (0-3)
-	STYP uint8   // Subtype (0-3)
-	ARA [14]bool // Active Resolution Advisories (14 bits)
-	RAC uint8   // RA Complement (0-15)
-	RAT bool    // RA Terminated
-	MTE bool    // Multiple Threat Encounter
-	TTI uint8   // Threat Type Indicator (0-3)
-	TID [4]byte // Threat Identity Data (4 characters, 6-bit IA5)
+	TYP  uint8    // Type of threat (0-3)
+	STYP uint8    // Subtype (0-3)
+	ARA  [14]bool // Active Resolution Advisories (14 bits)
+	RAC  uint8    // RA Complement (0-15)
+	RAT  bool     // RA Terminated
+	MTE  bool     // Multiple Threat Encounter
+	TTI  uint8    // Threat Type Indicator (0-3)
+	TID  [4]byte  // Threat Identity Data (4 characters, 6-bit IA5)
 }
 
 func (a *ACASResolutionAdvisory) Encode(buf *bytes.Buffer) (int, error) {

@@ -95,7 +95,7 @@ func buildFullCAT062Record() map[string]asterix.DataItem {
 }
 
 // uint8ptr / uint16ptr are helpers for pointer fields used in EstimatedAccuracies.
-func uint8ptr(v uint8) *uint8   { return &v }
+func uint8ptr(v uint8) *uint8    { return &v }
 func uint16ptr(v uint16) *uint16 { return &v }
 
 // TestCAT062FullStackRoundTrip encodes a CAT062 record through the real

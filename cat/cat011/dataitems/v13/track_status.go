@@ -57,10 +57,10 @@ const (
 
 // Friend/Foe constants
 const (
-	FriFoeNoMode4     uint8 = 0 // No Mode 4 interrogation
-	FriFoeFriendly    uint8 = 1 // Friendly target
-	FriFoeUnknown     uint8 = 2 // Unknown target
-	FriFoeNoReply     uint8 = 3 // No reply
+	FriFoeNoMode4  uint8 = 0 // No Mode 4 interrogation
+	FriFoeFriendly uint8 = 1 // Friendly target
+	FriFoeUnknown  uint8 = 2 // Unknown target
+	FriFoeNoReply  uint8 = 3 // No reply
 )
 
 func (t *TrackStatus) Decode(buf *bytes.Buffer) (int, error) {

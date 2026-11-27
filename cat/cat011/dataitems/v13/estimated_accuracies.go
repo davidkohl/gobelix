@@ -20,25 +20,25 @@ type EstimatedAccuracies struct {
 	HasAAC bool // Acceleration accuracy
 
 	// Values
-	APCX float64 // X-component position accuracy (m), LSB = 0.25m
-	APCY float64 // Y-component position accuracy (m)
+	APCX   float64 // X-component position accuracy (m), LSB = 0.25m
+	APCY   float64 // Y-component position accuracy (m)
 	APWLat float64 // Latitude accuracy (degrees), LSB = 180/2^31
 	APWLon float64 // Longitude accuracy (degrees)
-	ATH  float64 // Height accuracy (m), LSB = 0.5m
-	AVCX float64 // X-velocity accuracy (m/s), LSB = 0.1 m/s
-	AVCY float64 // Y-velocity accuracy (m/s)
-	ARC  float64 // Rate of climb accuracy (m/s), LSB = 0.1 m/s
-	AACX float64 // X-acceleration accuracy (m/s²), LSB = 0.01 m/s²
-	AACY float64 // Y-acceleration accuracy (m/s²)
+	ATH    float64 // Height accuracy (m), LSB = 0.5m
+	AVCX   float64 // X-velocity accuracy (m/s), LSB = 0.1 m/s
+	AVCY   float64 // Y-velocity accuracy (m/s)
+	ARC    float64 // Rate of climb accuracy (m/s), LSB = 0.1 m/s
+	AACX   float64 // X-acceleration accuracy (m/s²), LSB = 0.01 m/s²
+	AACY   float64 // Y-acceleration accuracy (m/s²)
 }
 
 const (
-	apcLSB = 0.25       // meters
+	apcLSB = 0.25                 // meters
 	apwLSB = 180.0 / 2147483648.0 // 180/2^31 degrees
-	athLSB = 0.5        // meters
-	avcLSB = 0.1        // m/s
-	arcLSB = 0.1        // m/s
-	aacLSB = 0.01       // m/s²
+	athLSB = 0.5                  // meters
+	avcLSB = 0.1                  // m/s
+	arcLSB = 0.1                  // m/s
+	aacLSB = 0.01                 // m/s²
 )
 
 func (e *EstimatedAccuracies) Decode(buf *bytes.Buffer) (int, error) {

@@ -13,8 +13,8 @@ import (
 // Bits 54-49: spare
 // Bits 48-1: 8 characters (6 bits each)
 type TargetIdentification struct {
-	STI        uint8  // Source: 0=downlinked, 1=callsign not downlinked, 2=registration not downlinked
-	Callsign   string // 8-character callsign
+	STI      uint8  // Source: 0=downlinked, 1=callsign not downlinked, 2=registration not downlinked
+	Callsign string // 8-character callsign
 }
 
 // STI constants

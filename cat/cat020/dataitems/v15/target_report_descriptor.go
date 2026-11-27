@@ -8,28 +8,28 @@ import (
 
 // TargetReportDescriptor implements I020/020 - Target Report Descriptor
 type TargetReportDescriptor struct {
-	SSR  bool // SSR detection
-	MS   bool // Mode-S detection
-	HF   bool // High Frequency Multilateration
-	VDL4 bool // VDL Mode 4 Multilateration
-	UAT  bool // UAT Multilateration
-	DME  bool // DME
-	OT   bool // Other Technology
-	RAB  bool // Report from target transponder
-	SPI  bool // Special Position Identification
-	CHN  bool // Chain (1 or 2)
-	GBS  bool // Transponder Ground bit set
-	CRT  bool // Corrupted reply in multilateration
-	SIM  bool // Simulated target
-	TST  bool // Test target
-	SAA  bool // Selected altitude available
+	SSR  bool  // SSR detection
+	MS   bool  // Mode-S detection
+	HF   bool  // High Frequency Multilateration
+	VDL4 bool  // VDL Mode 4 Multilateration
+	UAT  bool  // UAT Multilateration
+	DME  bool  // DME
+	OT   bool  // Other Technology
+	RAB  bool  // Report from target transponder
+	SPI  bool  // Special Position Identification
+	CHN  bool  // Chain (1 or 2)
+	GBS  bool  // Transponder Ground bit set
+	CRT  bool  // Corrupted reply in multilateration
+	SIM  bool  // Simulated target
+	TST  bool  // Test target
+	SAA  bool  // Selected altitude available
 	CL   uint8 // Confidence level (0-3)
-	LLC  bool // List Lookup Check
-	IPC  bool // Independent Position Check
-	NOGO bool // NOGO bit status
-	CPR  bool // Compact Position Reporting
-	LDPJ bool // Local Decoding Position Jump
-	RCF  bool // Range Check Failure
+	LLC  bool  // List Lookup Check
+	IPC  bool  // Independent Position Check
+	NOGO bool  // NOGO bit status
+	CPR  bool  // Compact Position Reporting
+	LDPJ bool  // Local Decoding Position Jump
+	RCF  bool  // Range Check Failure
 }
 
 func (t *TargetReportDescriptor) Decode(buf *bytes.Buffer) (int, error) {

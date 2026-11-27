@@ -70,7 +70,7 @@ func TestFusionMessageTrace(t *testing.T) {
 	t.Logf("[%d] I062/380 (FRN 11) - COMPOUND:", offset)
 	i380_fspec := data[offset]
 	t.Logf("  FSPEC: %02X (%08b)", i380_fspec, i380_fspec)
-	_ = 1 // i380_len
+	_ = 1      // i380_len
 	_ = offset // offset_before_380
 
 	// Count how many subfields in I062/380

@@ -6,11 +6,11 @@ package common
 // Each 6-bit code (0-63) maps to a character in this 64-character array
 // Space (0x20) represents code 0 and undefined/reserved codes
 var SixBitToASCII = [64]byte{
-	' ', // 0: Space
+	' ',                                                             // 0: Space
 	'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', // 1-13
 	'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', // 14-26
 	' ', ' ', ' ', ' ', ' ', // 27-31: Reserved
-	' ', // 32: Space
+	' ',                                                                       // 32: Space
 	' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', // 33-47: Reserved
 	'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', // 48-57
 	' ', ' ', ' ', ' ', ' ', ' ', // 58-63: Reserved

@@ -66,42 +66,42 @@ func TestFSPECBitMapping(t *testing.T) {
 
 	t.Log("\n=== FRN Mapping (from UAP) ===")
 	frnToItem := []string{
-		"",           // FRN 0 (doesn't exist)
-		"I062/010",   // FRN 1
-		"Spare",      // FRN 2
-		"I062/015",   // FRN 3
-		"I062/070",   // FRN 4
-		"I062/105",   // FRN 5
-		"I062/100",   // FRN 6
-		"I062/185",   // FRN 7
-		"I062/210",   // FRN 8
-		"I062/060",   // FRN 9
-		"I062/245",   // FRN 10
-		"I062/380",   // FRN 11
-		"I062/040",   // FRN 12
-		"I062/080",   // FRN 13
-		"I062/290",   // FRN 14
-		"I062/200",   // FRN 15
-		"I062/295",   // FRN 16
-		"I062/136",   // FRN 17
-		"I062/130",   // FRN 18
-		"I062/135",   // FRN 19
-		"I062/220",   // FRN 20
-		"I062/390",   // FRN 21
-		"I062/270",   // FRN 22
-		"I062/300",   // FRN 23
-		"I062/110",   // FRN 24
-		"I062/120",   // FRN 25
-		"I062/510",   // FRN 26
-		"I062/500",   // FRN 27
-		"I062/340",   // FRN 28
-		"Spare",      // FRN 29
-		"Spare",      // FRN 30
-		"Spare",      // FRN 31
-		"Spare",      // FRN 32
-		"Spare",      // FRN 33
-		"RE062",      // FRN 34
-		"SP062",      // FRN 35
+		"",         // FRN 0 (doesn't exist)
+		"I062/010", // FRN 1
+		"Spare",    // FRN 2
+		"I062/015", // FRN 3
+		"I062/070", // FRN 4
+		"I062/105", // FRN 5
+		"I062/100", // FRN 6
+		"I062/185", // FRN 7
+		"I062/210", // FRN 8
+		"I062/060", // FRN 9
+		"I062/245", // FRN 10
+		"I062/380", // FRN 11
+		"I062/040", // FRN 12
+		"I062/080", // FRN 13
+		"I062/290", // FRN 14
+		"I062/200", // FRN 15
+		"I062/295", // FRN 16
+		"I062/136", // FRN 17
+		"I062/130", // FRN 18
+		"I062/135", // FRN 19
+		"I062/220", // FRN 20
+		"I062/390", // FRN 21
+		"I062/270", // FRN 22
+		"I062/300", // FRN 23
+		"I062/110", // FRN 24
+		"I062/120", // FRN 25
+		"I062/510", // FRN 26
+		"I062/500", // FRN 27
+		"I062/340", // FRN 28
+		"Spare",    // FRN 29
+		"Spare",    // FRN 30
+		"Spare",    // FRN 31
+		"Spare",    // FRN 32
+		"Spare",    // FRN 33
+		"RE062",    // FRN 34
+		"SP062",    // FRN 35
 	}
 
 	// Now decode FSPEC byte by byte

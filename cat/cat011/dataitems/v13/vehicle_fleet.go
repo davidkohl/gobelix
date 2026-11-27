@@ -14,23 +14,23 @@ type VehicleFleetIdentification struct {
 
 // Vehicle fleet constants
 const (
-	VFIFlyco             uint8 = 0  // Flyco (follow me)
-	VFIATCMaintenance    uint8 = 1  // ATC equipment maintenance
-	VFIAirportMaint      uint8 = 2  // Airport maintenance
-	VFIFire              uint8 = 3  // Fire
-	VFIBirdScarer        uint8 = 4  // Bird scarer
-	VFISnowPlough        uint8 = 5  // Snow plough
-	VFIRunwaySweeper     uint8 = 6  // Runway sweeper
-	VFIEmergency         uint8 = 7  // Emergency
-	VFIPolice            uint8 = 8  // Police
-	VFIBus               uint8 = 9  // Bus
-	VFITug               uint8 = 10 // Tug (push/tow)
-	VFIGrassCutter       uint8 = 11 // Grass cutter
-	VFIFuel              uint8 = 12 // Fuel
-	VFIBaggage           uint8 = 13 // Baggage
-	VFICatering          uint8 = 14 // Catering
-	VFIAircraftMaint     uint8 = 15 // Aircraft maintenance
-	VFIUnknown           uint8 = 16 // Unknown
+	VFIFlyco          uint8 = 0  // Flyco (follow me)
+	VFIATCMaintenance uint8 = 1  // ATC equipment maintenance
+	VFIAirportMaint   uint8 = 2  // Airport maintenance
+	VFIFire           uint8 = 3  // Fire
+	VFIBirdScarer     uint8 = 4  // Bird scarer
+	VFISnowPlough     uint8 = 5  // Snow plough
+	VFIRunwaySweeper  uint8 = 6  // Runway sweeper
+	VFIEmergency      uint8 = 7  // Emergency
+	VFIPolice         uint8 = 8  // Police
+	VFIBus            uint8 = 9  // Bus
+	VFITug            uint8 = 10 // Tug (push/tow)
+	VFIGrassCutter    uint8 = 11 // Grass cutter
+	VFIFuel           uint8 = 12 // Fuel
+	VFIBaggage        uint8 = 13 // Baggage
+	VFICatering       uint8 = 14 // Catering
+	VFIAircraftMaint  uint8 = 15 // Aircraft maintenance
+	VFIUnknown        uint8 = 16 // Unknown
 )
 
 func (v *VehicleFleetIdentification) Decode(buf *bytes.Buffer) (int, error) {

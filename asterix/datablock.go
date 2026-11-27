@@ -182,9 +182,9 @@ func (db *DataBlock) Decode(data []byte) error {
 	// The validation can be re-enabled for debugging buffer misalignment issues
 	// by uncommenting the code below.
 	/*
-	if err := db.validateSACandSICConsistency(); err != nil {
-		return err
-	}
+		if err := db.validateSACandSICConsistency(); err != nil {
+			return err
+		}
 	*/
 
 	return nil

@@ -33,8 +33,8 @@ func TestCAT020_DecodeSAC_SIC(t *testing.T) {
 	data := []byte{
 		0x14,       // CAT 020
 		0x00, 0x09, // LEN = 9 bytes
-		0xA0,             // FSPEC: FRN 1 and 3
-		0x19, 0x0A,       // I020/010: SAC=25, SIC=10
+		0xA0,       // FSPEC: FRN 1 and 3
+		0x19, 0x0A, // I020/010: SAC=25, SIC=10
 		0x18, 0x18, 0x80, // I020/140: Time = 12345.0 seconds
 	}
 

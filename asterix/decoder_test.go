@@ -385,7 +385,7 @@ func TestDecodeAll(t *testing.T) {
 		firstMsgItemData := map[string][]byte{
 			"I021/010": {0, 1},
 			"I021/040": {2},
-			"I021/030": {3, 4, 5},  // i%2==0 for i=0
+			"I021/030": {3, 4, 5}, // i%2==0 for i=0
 		}
 		firstMsgLen := len(createTestMessage(Cat021, firstMsgItemData))
 		data[firstMsgLen] = 0 // Set invalid category for second message

@@ -84,9 +84,9 @@ func TestTrackNumber_RoundTrip(t *testing.T) {
 
 func TestTrackMode3ACode_RoundTrip(t *testing.T) {
 	cases := []struct {
-		name      string
-		item      v120.TrackMode3ACode
-		encoded   []byte
+		name    string
+		item    v120.TrackMode3ACode
+		encoded []byte
 	}{
 		{
 			name:    "zero code no flags",
@@ -457,8 +457,8 @@ func TestModeOfMovement_RoundTrip(t *testing.T) {
 
 func TestTrackStatus_RoundTrip(t *testing.T) {
 	cases := []struct {
-		name string
-		item v120.TrackStatus
+		name      string
+		item      v120.TrackStatus
 		wantBytes int
 	}{
 		{
@@ -669,7 +669,10 @@ func TestEstimatedAccuracies_AllSubfields_RoundTrip(t *testing.T) {
 // --- I062/220 CalculatedRateOfClimbDescent (extending existing tests) ---
 
 func TestCalculatedRateOfClimbDescent_RoundTripExtended(t *testing.T) {
-	cases := []struct{ name string; rate float64 }{
+	cases := []struct {
+		name string
+		rate float64
+	}{
 		{"zero", 0},
 		{"climb 2000 ft/min", 2000},
 		{"descent 3000 ft/min", -3000},

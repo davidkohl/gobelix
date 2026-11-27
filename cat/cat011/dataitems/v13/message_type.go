@@ -14,13 +14,13 @@ type MessageType struct {
 
 // Message type constants
 const (
-	MessageTypeTargetReport          uint8 = 1 // Target reports, flight plan data and basic alerts
-	MessageTypeManualAttachment      uint8 = 2 // Manual attachment of flight plan to track
-	MessageTypeManualDetachment      uint8 = 3 // Manual detachment of flight plan to track
-	MessageTypeFlightPlanInsertion   uint8 = 4 // Insertion of flight plan data
-	MessageTypeFlightPlanSuppression uint8 = 5 // Suppression of flight plan data
+	MessageTypeTargetReport           uint8 = 1 // Target reports, flight plan data and basic alerts
+	MessageTypeManualAttachment       uint8 = 2 // Manual attachment of flight plan to track
+	MessageTypeManualDetachment       uint8 = 3 // Manual detachment of flight plan to track
+	MessageTypeFlightPlanInsertion    uint8 = 4 // Insertion of flight plan data
+	MessageTypeFlightPlanSuppression  uint8 = 5 // Suppression of flight plan data
 	MessageTypeFlightPlanModification uint8 = 6 // Modification of flight plan data
-	MessageTypeHoldbarStatus         uint8 = 7 // Holdbar status
+	MessageTypeHoldbarStatus          uint8 = 7 // Holdbar status
 )
 
 func (m *MessageType) Decode(buf *bytes.Buffer) (int, error) {

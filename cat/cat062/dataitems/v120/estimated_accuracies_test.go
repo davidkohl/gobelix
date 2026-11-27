@@ -16,8 +16,8 @@ func TestEstimatedAccuracies_RoundTrip(t *testing.T) {
 		encoded []byte
 	}{
 		{
-			name: "Empty (no subfields)",
-			item: &v120.EstimatedAccuracies{},
+			name:    "Empty (no subfields)",
+			item:    &v120.EstimatedAccuracies{},
 			encoded: []byte{0x00}, // FSPEC with no bits set
 		},
 		{
@@ -242,6 +242,6 @@ func TestEstimatedAccuracies_DecodeTruncated(t *testing.T) {
 }
 
 // Helper functions
-func uint8Ptr(v uint8) *uint8   { return &v }
+func uint8Ptr(v uint8) *uint8    { return &v }
 func uint16Ptr(v uint16) *uint16 { return &v }
-func int16Ptr(v int16) *int16   { return &v }
+func int16Ptr(v int16) *int16    { return &v }

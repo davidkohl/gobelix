@@ -25,8 +25,8 @@ type MeasuredInformation struct {
 
 	// Subfield #2: Measured Position (Cartesian coordinates)
 	// In meters, LSB = 0.5m for both Rho and Theta
-	MeasuredPositionRho   *int16   // Rho component (radial distance)
-	MeasuredPositionTheta *uint16  // Theta component (azimuth angle)
+	MeasuredPositionRho   *int16  // Rho component (radial distance)
+	MeasuredPositionTheta *uint16 // Theta component (azimuth angle)
 
 	// Subfield #3: Measured 3-D Height
 	// In feet, LSB = 25 feet

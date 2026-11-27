@@ -141,4 +141,3 @@ func (p *CalculatedPositionWGS84) Validate() error {
 
 	return nil
 }
-

@@ -20,12 +20,12 @@ type ModeSRelatedData struct {
 	HasATC bool // Available technologies present
 
 	// Subfield values
-	MBData           []ModeSMBReport // BDS reports
-	AircraftAddress  uint32          // 24-bit Mode S address
-	CommsCapability  CommsACASStatus // Communications/ACAS capability
-	AircraftType     string          // 4-character aircraft type
-	EmitterCategory  uint8           // Emitter category code
-	AvailableTech    AvailableTechnologies
+	MBData          []ModeSMBReport // BDS reports
+	AircraftAddress uint32          // 24-bit Mode S address
+	CommsCapability CommsACASStatus // Communications/ACAS capability
+	AircraftType    string          // 4-character aircraft type
+	EmitterCategory uint8           // Emitter category code
+	AvailableTech   AvailableTechnologies
 }
 
 // ModeSMBReport represents a single BDS report

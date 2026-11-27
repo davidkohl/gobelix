@@ -41,8 +41,8 @@ type FlightPlanRelatedData struct {
 	CurrentClearedFlightLevel *int16 // Flight level in hundreds of feet, LSB = 0.25 FL
 
 	// Subfield #11: Current Control Position
-	CurrentControlPositionCentre *uint8  // 8-bit centre
-	CurrentControlPositionPos    *uint8  // 8-bit position
+	CurrentControlPositionCentre *uint8 // 8-bit centre
+	CurrentControlPositionPos    *uint8 // 8-bit position
 
 	// Subfield #12: Time of Departure/Arrival (Repetitive)
 	TimeOfDepartureArrival []TimeOfDepartureArrival
@@ -70,12 +70,12 @@ type FlightPlanRelatedData struct {
 
 // TimeOfDepartureArrival represents a single time entry
 type TimeOfDepartureArrival struct {
-	TYP uint8   // 5-bit type indicator
-	DAY uint8   // 2-bit day (today, yesterday, tomorrow, +1)
-	HOR uint8   // 4-bit hour correction (-8 to +7 from DAY)
-	MIN uint8   // 6-bit minutes
-	AVS bool    // Available for departure/arrival
-	SEC uint16  // 16-bit seconds from midnight
+	TYP uint8  // 5-bit type indicator
+	DAY uint8  // 2-bit day (today, yesterday, tomorrow, +1)
+	HOR uint8  // 4-bit hour correction (-8 to +7 from DAY)
+	MIN uint8  // 6-bit minutes
+	AVS bool   // Available for departure/arrival
+	SEC uint16 // 16-bit seconds from midnight
 }
 
 func (f *FlightPlanRelatedData) Decode(buf *bytes.Buffer) (int, error) {
@@ -310,11 +310,11 @@ func (f *FlightPlanRelatedData) decodeTimeOfDepartureArrival(buf *bytes.Buffer) 
 
 		// Decode time entry
 		entry := &f.TimeOfDepartureArrival[i]
-		entry.TYP = (todData[0] >> 3) & 0x1F // Bits 8-4
-		entry.DAY = (todData[0] >> 1) & 0x03 // Bits 3-2
+		entry.TYP = (todData[0] >> 3) & 0x1F                                // Bits 8-4
+		entry.DAY = (todData[0] >> 1) & 0x03                                // Bits 3-2
 		entry.HOR = ((todData[0] & 0x01) << 3) | ((todData[1] >> 5) & 0x07) // Bit 1 + bits 8-6
-		entry.MIN = (todData[1] >> 2) & 0x3F // Bits 5-1 (6 bits spans across bytes, actually bits 13-8)
-		entry.AVS = (todData[1] & 0x02) != 0 // Bit 2 of second byte
+		entry.MIN = (todData[1] >> 2) & 0x3F                                // Bits 5-1 (6 bits spans across bytes, actually bits 13-8)
+		entry.AVS = (todData[1] & 0x02) != 0                                // Bit 2 of second byte
 		entry.SEC = uint16(todData[2])<<8 | uint16(todData[3])
 	}
 

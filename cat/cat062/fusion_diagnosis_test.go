@@ -184,7 +184,7 @@ func TestManualDataItemDecode(t *testing.T) {
 	// 2. Fusion set the I062/220 bit but didn't write the data, OR
 	// 3. gobelix is consuming too many bytes before reaching I062/220
 
-	expectedLen := (uint16(data[1])<<8) | uint16(data[2])
+	expectedLen := (uint16(data[1]) << 8) | uint16(data[2])
 	actualLen := len(data)
 
 	if expectedLen != uint16(actualLen) {

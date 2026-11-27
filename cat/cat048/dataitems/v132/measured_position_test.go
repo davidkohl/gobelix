@@ -41,7 +41,7 @@ func TestMeasuredPosition_EncodeDecode(t *testing.T) {
 				THETA: 0.0,
 			},
 			expected:  []byte{0xFF, 0xFD, 0x00, 0x00}, // 255.99 * 256 = 65533.44 -> 65533 = 0xFFFD
-			tolerance: 1.0 / 256.0 * 2, // Allow 2xLSB tolerance
+			tolerance: 1.0 / 256.0 * 2,                // Allow 2xLSB tolerance
 		},
 		{
 			name: "Full circle - 360 degrees (wraps to 0)",
@@ -245,7 +245,7 @@ func TestMeasuredPosition_RoundTrip(t *testing.T) {
 		{RHO: 200.75, THETA: 135.25},
 	}
 
-	rhoTolerance := 1.0 / 256.0 * 2    // 2x LSB for RHO
+	rhoTolerance := 1.0 / 256.0 * 2       // 2x LSB for RHO
 	thetaTolerance := 360.0 / 65536.0 * 2 // 2x LSB for THETA
 
 	for _, pos := range testPositions {
@@ -294,7 +294,7 @@ func TestMeasuredPosition_RoundTrip(t *testing.T) {
 
 func TestMeasuredPosition_Resolution(t *testing.T) {
 	// Test that LSB resolution is correct
-	rhoLSB := 1.0 / 256.0 // ~0.00390625 NM
+	rhoLSB := 1.0 / 256.0       // ~0.00390625 NM
 	thetaLSB := 360.0 / 65536.0 // ~0.0055 degrees
 
 	// Test RHO LSB

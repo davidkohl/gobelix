@@ -12,9 +12,9 @@ import (
 // FinalStateSelectedAltitude implements I021/148
 // Final State Selected Altitude (2 octets)
 type FinalStateSelectedAltitude struct {
-	MV  bool  // Manage Vertical Mode active
-	AH  bool  // Altitude Hold Mode active
-	AM  bool  // Approach Mode active
+	MV  bool    // Manage Vertical Mode active
+	AH  bool    // Altitude Hold Mode active
+	AM  bool    // Approach Mode active
 	Alt float64 // Altitude in feet (13-bit raw, LSB 25 ft: range ±102,375 ft)
 }
 
@@ -43,7 +43,7 @@ func (f *FinalStateSelectedAltitude) Encode(buf *bytes.Buffer) (int, error) {
 	// Two's complement is automatically handled by uint16 cast
 	rawUnsigned := uint16(raw) & 0x1FFF
 	data[0] |= byte((rawUnsigned >> 8) & 0x1F) // Upper 5 bits
-	data[1] = byte(rawUnsigned)                 // Lower 8 bits
+	data[1] = byte(rawUnsigned)                // Lower 8 bits
 
 	n, err := buf.Write(data[:])
 	if err != nil {

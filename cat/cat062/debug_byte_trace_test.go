@@ -65,20 +65,20 @@ func TestByteByByteTrace(t *testing.T) {
 
 	// Known fixed sizes
 	sizes := map[string]int{
-		"I062/010": 2,  // SAC/SIC
-		"I062/070": 3,  // Time of Track Info
-		"I062/105": 8,  // WGS-84 Position
-		"I062/100": 6,  // Cartesian Position
-		"I062/185": 4,  // Cartesian Velocity
-		"I062/210": 2,  // Cartesian Acceleration
-		"I062/060": 2,  // Mode 3/A
-		"I062/245": 7,  // Target Identification
-		"I062/040": 2,  // Track Number
-		"I062/080": 3,  // Track Status
-		"I062/200": 1,  // Mode of Movement
-		"I062/136": 2,  // Measured Flight Level
-		"I062/130": 2,  // Calculated Position Accuracy
-		"I062/135": 1,  // Calculated Geometric Altitude Accuracy
+		"I062/010": 2, // SAC/SIC
+		"I062/070": 3, // Time of Track Info
+		"I062/105": 8, // WGS-84 Position
+		"I062/100": 6, // Cartesian Position
+		"I062/185": 4, // Cartesian Velocity
+		"I062/210": 2, // Cartesian Acceleration
+		"I062/060": 2, // Mode 3/A
+		"I062/245": 7, // Target Identification
+		"I062/040": 2, // Track Number
+		"I062/080": 3, // Track Status
+		"I062/200": 1, // Mode of Movement
+		"I062/136": 2, // Measured Flight Level
+		"I062/130": 2, // Calculated Position Accuracy
+		"I062/135": 1, // Calculated Geometric Altitude Accuracy
 	}
 
 	t.Logf("\n=== Parsing data items ===")

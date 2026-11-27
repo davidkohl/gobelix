@@ -13,8 +13,8 @@ import (
 
 	"github.com/davidkohl/gobelix/asterix"
 
-	uap021 "github.com/davidkohl/gobelix/cat/cat021/uap"
 	v26cat021 "github.com/davidkohl/gobelix/cat/cat021/dataitems/v26"
+	uap021 "github.com/davidkohl/gobelix/cat/cat021/uap"
 	common "github.com/davidkohl/gobelix/cat/common/dataitems"
 )
 

@@ -169,7 +169,7 @@ func TestCat034DataSourcePosition(t *testing.T) {
 	pos := v129.NewDataSourcePosition()
 	pos.Latitude = 50.033333 // ~50°02'N
 	pos.Longitude = 8.570556 // ~8°34'E
-	pos.HeightM = 364.0       // ~364 m height (LSB 1 m)
+	pos.HeightM = 364.0      // ~364 m height (LSB 1 m)
 	if err := record.SetDataItem("I034/120", pos); err != nil {
 		t.Fatalf("Failed to set I034/120: %v", err)
 	}
