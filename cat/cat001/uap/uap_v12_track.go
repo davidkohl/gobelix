@@ -69,6 +69,8 @@ func (u *UAP12Track) CreateDataItem(id string) (asterix.DataItem, error) {
 		return &v12.TrackVelocity{}, nil
 	case "I001/210":
 		return &v12.TrackQuality{}, nil
+	case "SP001":
+		return &common.ExplicitField{}, nil
 	default:
 		return nil, fmt.Errorf("%w: %s", asterix.ErrUnknownDataItem, id)
 	}
@@ -237,8 +239,15 @@ var cat001TrackFields = []asterix.DataField{
 		Type:        asterix.Extended,
 		Mandatory:   false,
 	},
-	// FRN 20: Reserved for SP Indicator
-	// FRN 21: Reserved for RFS Indicator
+	// FRN 20: SP indicator (ed 1.4 §5.4.2, LEN counts itself)
+	{
+		FRN:         20,
+		DataItem:    "SP001",
+		Description: "Special Purpose Field",
+		Type:        asterix.Explicit,
+		Mandatory:   false,
+	},
+	// FRN 21: Reserved for RFS Indicator (RFS is not supported)
 	// FX - Field Extension Indicator
 	{
 		FRN:         22,

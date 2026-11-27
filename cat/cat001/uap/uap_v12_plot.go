@@ -59,6 +59,8 @@ func (u *UAP12Plot) CreateDataItem(id string) (asterix.DataItem, error) {
 		return &v12.TruncatedTimeOfDay{}, nil
 	case "I001/150":
 		return &v12.PresenceXPulse{}, nil
+	case "SP001":
+		return &common.ExplicitField{}, nil
 	default:
 		return nil, fmt.Errorf("%w: %s", asterix.ErrUnknownDataItem, id)
 	}
@@ -197,4 +199,14 @@ var cat001PlotFields = []asterix.DataField{
 		Length:      1,
 		Mandatory:   false,
 	},
+	// FRN 16-19: spare
+	// FRN 20: SP indicator (ed 1.4 §5.3.2.16 note 2, LEN counts itself)
+	{
+		FRN:         20,
+		DataItem:    "SP001",
+		Description: "Special Purpose Field",
+		Type:        asterix.Explicit,
+		Mandatory:   false,
+	},
+	// FRN 21: Reserved for RFS Indicator (RFS is not supported)
 }

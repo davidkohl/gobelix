@@ -16,6 +16,7 @@ type TrackStatus struct {
 	DOU  bool // Doubtful plot to track association
 	RDPC bool // Radar Data Processing Chain (0=Chain 1, 1=Chain 2)
 	GHO  bool // Ghost track
+	TRE  bool // First extent: last report for a track (CAT001 ed 1.4 §5.2.18)
 }
 
 func (t *TrackStatus) Decode(buf *bytes.Buffer) (int, error) {
@@ -36,10 +37,23 @@ func (t *TrackStatus) Decode(buf *bytes.Buffer) (int, error) {
 	// bit 3 is spare
 	t.GHO = (data & 0x02) != 0 // bit 2
 
+	t.TRE = false
+
 	// Check FX bit for extension
 	hasFX := (data & 0x01) != 0
 
-	// Handle extensions if present (spare in current version)
+	// First extent: TRE (bit 8), spare (7-2), FX
+	if hasFX {
+		data, err = buf.ReadByte()
+		if err != nil {
+			return bytesRead, fmt.Errorf("%w: incomplete track status extension", asterix.ErrBufferTooShort)
+		}
+		bytesRead++
+		t.TRE = data&0x80 != 0
+		hasFX = (data & 0x01) != 0
+	}
+
+	// Further extents are not defined in ed 1.4; skip them.
 	for hasFX {
 		data, err = buf.ReadByte()
 		if err != nil {
@@ -73,12 +87,20 @@ func (t *TrackStatus) Encode(buf *bytes.Buffer) (int, error) {
 	if t.GHO {
 		octet |= 0x02 // bit 2
 	}
-	// FX bit (bit 1) is set to 0 (no extension)
+	if t.TRE {
+		octet |= 0x01 // FX: first extent follows
+	}
 
 	if err := buf.WriteByte(octet); err != nil {
 		return 0, fmt.Errorf("writing track status: %w", err)
 	}
-	return 1, nil
+	if !t.TRE {
+		return 1, nil
+	}
+	if err := buf.WriteByte(0x80); err != nil {
+		return 1, fmt.Errorf("writing track status extent: %w", err)
+	}
+	return 2, nil
 }
 
 func (t *TrackStatus) Validate() error {
@@ -110,6 +132,9 @@ func (t *TrackStatus) String() string {
 	}
 	if t.GHO {
 		result += " GHOST"
+	}
+	if t.TRE {
+		result += " END"
 	}
 	return result
 }

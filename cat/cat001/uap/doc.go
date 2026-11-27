@@ -16,30 +16,17 @@
 //	FRN 3 in Plot UAP  = I001/040 (Measured Position Polar)
 //	FRN 3 in Track UAP = I001/161 (Track Number)
 //
-// This means you cannot use a unified UAP - the correct UAP must be selected
-// based on what your radar system transmits.
-//
-// # Choosing the Right UAP
-//
-// Use Plot UAP (default) when:
-//   - Receiving data from primary surveillance radar (PSR)
-//   - Receiving data from secondary surveillance radar (SSR)
-//   - Your radar sends raw detections without track processing
-//   - You're unsure which format your radar uses (most send plots)
-//
-// Use Track UAP when:
-//   - Your radar has a built-in tracker that outputs track data
-//   - You specifically know your radar transmits CAT001 tracks
-//   - The data includes track-specific items like I001/161 (Track Number),
-//     I001/042 (Cartesian Position), I001/200 (Track Velocity)
+// I001/020 TYP (bit 8 of its first octet) tells which UAP applies to the
+// rest of the record. NewUAP12 reads TYP per record and switches between the
+// two (it implements asterix.RecordUAPSelector).
 //
 // # Usage
 //
-//	// For plot data (most common - this is the default):
-//	uap, err := uap.NewUAP12()      // or uap.NewUAP12Plot()
+//	// Plot or track per record, selected by I001/020 TYP:
+//	uap, err := uap.NewUAP12()
 //
-//	// For track data (only if your radar has built-in tracking):
-//	uap, err := uap.NewUAP12Track()
+//	// Force one layout:
+//	uap, err := uap.NewUAP12Plot() // or uap.NewUAP12Track()
 //
 // # Typical ATC Data Flow
 //

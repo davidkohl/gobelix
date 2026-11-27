@@ -111,7 +111,7 @@ func TestCAT001RoundTrip(t *testing.T) {
 	items := map[string]asterix.DataItem{
 		"I001/010": &common.DataSourceIdentifier{SAC: 10, SIC: 20},
 		"I001/020": &v12cat001.TargetReportDescriptor{
-			TYP: 2,
+			TYP: v12cat001.TYPPlot, // TYP is one bit (ed 1.4 §5.2.2): 0 = plot
 			SIM: false,
 			SSR: true,
 			PSR: false,
@@ -153,7 +153,7 @@ func TestCAT001RoundTrip(t *testing.T) {
 		if !ok {
 			t.Fatalf("I001/020: unexpected type %T", item)
 		}
-		assertEq(t, "TYP", uint8(2), trd.TYP)
+		assertEq(t, "TYP", v12cat001.TYPPlot, trd.TYP)
 		assertEq(t, "SSR", true, trd.SSR)
 		assertEq(t, "SPI", true, trd.SPI)
 	})
