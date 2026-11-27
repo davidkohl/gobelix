@@ -47,10 +47,12 @@ const (
 
 // decodeLayout maps each FRN that an FSPEC can signal to the field that
 // Record.Decode reads for it. field[frn] is -1 for an FRN without a data
-// item (spare, reserved, beyond the UAP); rfsFRN is the RS bit, 0 if none.
+// item (spare, reserved, beyond the UAP); rfsFRN is the RS bit, 0 if none;
+// bit frn of notInRFS is set for an FRN that the RFS field must not carry.
 type decodeLayout struct {
-	field  [maxFSPECFRN + 1]int16
-	rfsFRN uint8
+	field    [maxFSPECFRN + 1]int16
+	rfsFRN   uint8
+	notInRFS uint64
 }
 
 // RandomFieldSequencer is implemented by a UAP whose FSPEC reserves an RS
@@ -126,16 +128,28 @@ func (u *BaseUAP) decodeLayout() *decodeLayout {
 // EnableRFS declares frn as the RFS indicator (RS bit) of this UAP, so that
 // Record.Decode reads the RFS organised field at that FSPEC position:
 // one octet N, then N times a one-octet FRN followed by the data item of
-// that FRN. frn must not be used by a field. Call it only while building
-// the UAP, before it is shared.
-func (u *BaseUAP) EnableRFS(frn uint8) error {
+// that FRN. frn must not be used by a field. notInRFS lists the FRNs that
+// the RFS field must not carry (an RFS entry naming one is a decode
+// error), for example the SP field (CAT001 ed 1.4 §5.3.2.16 note 4,
+// CAT002 ed 1.2 §5.3.2.13 note 4: non-standard information goes in the SP
+// field "and not the RFS field(s)"). Each call replaces the previous one.
+// Call it only while building the UAP, before it is shared.
+func (u *BaseUAP) EnableRFS(frn uint8, notInRFS ...uint8) error {
 	if frn == 0 || frn > maxFSPECFRN {
 		return fmt.Errorf("%w: RFS FRN %d out of range", ErrInvalidField, frn)
 	}
 	if f, exists := u.fieldsByFRN[frn]; exists && f.DataItem != "" {
 		return fmt.Errorf("%w: RFS FRN %d is used by %s", ErrInvalidField, frn, f.DataItem)
 	}
+	var mask uint64
+	for _, x := range notInRFS {
+		if x == 0 || x > maxFSPECFRN || x == frn {
+			return fmt.Errorf("%w: FRN %d excluded from RFS out of range or the RS FRN", ErrInvalidField, x)
+		}
+		mask |= 1 << x
+	}
 	u.layout.rfsFRN = frn
+	u.layout.notInRFS = mask
 	return nil
 }
 

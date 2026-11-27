@@ -266,7 +266,7 @@ func (r *Record) decodeItemsByLayout(buf *bytes.Buffer, uap UAP, l *decodeLayout
 			b &^= 0x80 >> bit
 			frn := uint8(i*7 + bit + 1)
 			if frn == l.rfsFRN {
-				n, err := r.decodeRFS(buf, uap, frn, read)
+				n, err := r.decodeRFS(buf, uap, frn, l.notInRFS, read)
 				read += n
 				if err != nil {
 					return read, rfsSent, err
@@ -302,7 +302,7 @@ func (r *Record) decodeItemsByFields(buf *bytes.Buffer, uap UAP) (int, bool, err
 	for i := range fields {
 		field := &fields[i]
 		if rfsPending && field.FRN > rfsFRN {
-			n, err := r.decodeRFS(buf, uap, rfsFRN, read)
+			n, err := r.decodeRFS(buf, uap, rfsFRN, 0, read)
 			read += n
 			if err != nil {
 				return read, rfsSent, err
@@ -319,7 +319,7 @@ func (r *Record) decodeItemsByFields(buf *bytes.Buffer, uap UAP) (int, bool, err
 		}
 	}
 	if rfsPending {
-		n, err := r.decodeRFS(buf, uap, rfsFRN, read)
+		n, err := r.decodeRFS(buf, uap, rfsFRN, 0, read)
 		read += n
 		if err != nil {
 			return read, rfsSent, err
@@ -368,7 +368,9 @@ func (r *Record) decodeField(buf *bytes.Buffer, uap UAP, field *DataField, pos i
 // (CAT001 ed 1.4 §6, CAT002 ed 1.2 §6). The items join r.items as if they
 // had been sent in FSPEC order; Decode then rebuilds the FSPEC to that
 // standard form (RS bit cleared), so encoding the record writes no RFS field.
-func (r *Record) decodeRFS(buf *bytes.Buffer, uap UAP, rfsFRN uint8, pos int) (int, error) {
+// An entry naming an FRN whose bit is set in notInRFS (see BaseUAP.EnableRFS)
+// is an error.
+func (r *Record) decodeRFS(buf *bytes.Buffer, uap UAP, rfsFRN uint8, notInRFS uint64, pos int) (int, error) {
 	read := 0
 	count, err := buf.ReadByte()
 	if err != nil {
@@ -386,6 +388,11 @@ func (r *Record) decodeRFS(buf *bytes.Buffer, uap UAP, rfsFRN uint8, pos int) (i
 		if !ok || field.DataItem == "" || frn == rfsFRN {
 			return read, NewDecodeError(r.category, "RFS",
 				fmt.Sprintf("RFS field %d names FRN %d, which has no data item in the UAP", i+1, frn),
+				ErrInvalidFSPEC)
+		}
+		if frn <= maxFSPECFRN && notInRFS&(1<<frn) != 0 {
+			return read, NewDecodeError(r.category, field.DataItem,
+				fmt.Sprintf("RFS field %d names FRN %d, which the UAP does not allow in the RFS field", i+1, frn),
 				ErrInvalidFSPEC)
 		}
 		if _, dup := r.items[field.DataItem]; dup || r.fspec.GetFRN(frn) {

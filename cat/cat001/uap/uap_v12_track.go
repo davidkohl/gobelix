@@ -21,7 +21,8 @@ func NewUAP12Track() (*UAP12Track, error) {
 		return nil, err
 	}
 	// FRN 21 is the RS bit of the RFS organised field (ed 1.4 §5.4.2.20 note 2, §6).
-	if err := base.EnableRFS(21); err != nil {
+	// The SP field (FRN 20) must not be sent inside it (note 3).
+	if err := base.EnableRFS(21, 20); err != nil {
 		return nil, err
 	}
 

@@ -115,6 +115,31 @@ func TestBaseUAPEnableRFSRejectsUsedFRN(t *testing.T) {
 	if err := base.EnableRFS(57); err == nil {
 		t.Error("EnableRFS(57): want error (beyond an 8-octet FSPEC)")
 	}
+	for _, x := range []uint8{0, 2, 57} {
+		if err := base.EnableRFS(2, x); err == nil {
+			t.Errorf("EnableRFS(2, %d): want error (out of range or the RS FRN)", x)
+		}
+	}
+}
+
+// An FRN that EnableRFS excludes from the RFS field is a decode error when
+// an RFS entry names it, and still decodes at its FSPEC position.
+func TestRecordDecodeRFSExcludedFRN(t *testing.T) {
+	u := rfsUAP(t)
+	if err := u.BaseUAP.EnableRFS(2, 4); err != nil {
+		t.Fatal(err)
+	}
+	// FSPEC FRN 1, 2 (RS) | I021/010 | RFS: N=1, FRN 4, I021/040
+	rec, _ := NewRecord(Cat021, u)
+	_, err := rec.Decode(bytes.NewBuffer([]byte{0xC0, 0x01, 0x02, 0x01, 0x04, 0xAB}))
+	if !errors.Is(err, ErrInvalidFSPEC) {
+		t.Errorf("excluded FRN 4 inside RFS: err = %v, want ErrInvalidFSPEC", err)
+	}
+	// FSPEC FRN 1, 4 | I021/010 | I021/040
+	rec, _ = NewRecord(Cat021, u)
+	if _, err := rec.Decode(bytes.NewBuffer([]byte{0x90, 0x01, 0x02, 0xAB})); err != nil {
+		t.Errorf("excluded FRN 4 at its FSPEC position: %v", err)
+	}
 }
 
 // The RFS field sits at the FSPEC position of its RS bit (FRN 2 here,

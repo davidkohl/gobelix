@@ -219,6 +219,17 @@ func TestCat002RFSFieldAndSpareBit(t *testing.T) {
 	if !errors.Is(err, asterix.ErrInvalidFSPEC) {
 		t.Errorf("spare FRN 12: err = %v, want ErrInvalidFSPEC", err)
 	}
+
+	// SP (FRN 13) must not be sent inside the RFS field (§5.3.2.13 note 4):
+	// FRN 1, 2, 14 | 010 | 000 = 1 | RFS N=1: FRN 13, SP LEN 2, 0xAA.
+	_, err = d.Decode(block(2, []byte{0xC1, 0x02, 0x01, 0x02, 0x01, 0x01, 0x0D, 0x02, 0xAA}))
+	if !errors.Is(err, asterix.ErrInvalidFSPEC) {
+		t.Errorf("SP inside RFS: err = %v, want ErrInvalidFSPEC", err)
+	}
+	// At its FSPEC position it decodes: FRN 1, 2, 13 | 010 | 000 = 1 | SP.
+	if _, err := d.Decode(block(2, []byte{0xC1, 0x04, 0x01, 0x02, 0x01, 0x02, 0xAA})); err != nil {
+		t.Errorf("SP at FRN 13: %v", err)
+	}
 }
 
 // Legacy and new views of one item must agree when both are set; I002/070

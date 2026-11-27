@@ -21,7 +21,8 @@ func NewUAP10() (*UAP10, error) {
 		return nil, err
 	}
 	// FRN 14 is the RS bit of the RFS organised field (ed 1.2 §5.3.2.13 note 3, §6).
-	if err := base.EnableRFS(14); err != nil {
+	// The SP field (FRN 13) must not be sent inside it (note 4).
+	if err := base.EnableRFS(14, 13); err != nil {
 		return nil, err
 	}
 
