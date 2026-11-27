@@ -13,7 +13,9 @@ that old code fails to compile instead of reading other values.
   item in the UAP (spare, reserved, beyond the UAP, or an RS bit the UAP
   does not support). Before, the bit was ignored and every later item was
   read from the wrong offset without an error. Valid input decodes exactly
-  as before.
+  as before, except for the changes listed below: REP = 0 in I002/070 and
+  I023/120 is now a decode error, and the RS bit of CAT001/CAT002 is now
+  decoded as an RFS field.
 - `Record.Decode` walks the set FSPEC bits in FRN order through a table
   precomputed by `BaseUAP` instead of scanning every UAP field (faster; a
   UAP that does not embed `BaseUAP` keeps the field scan).
@@ -23,13 +25,18 @@ that old code fails to compile instead of reading other values.
   record and the FSPEC is rebuilt to the standard form, so `Encode` writes
   no RFS field. An RFS entry with an unknown FRN, the RS FRN itself or an
   item sent twice is a decode error.
+- `BaseUAP.EnableRFS(frn, notInRFS...)` also lists the FRNs that the RFS
+  field must not carry; an RFS entry naming one is a decode error
+  (`ErrInvalidFSPEC`). CAT001 and CAT002 use it for the SP field.
 - For a `RecordUAPSelector` UAP (CAT001), `SetDataItem` keeps the FSPEC in
   the layout the items select, so `FSPEC()`, `EstimateSize` and
   `DataBlock.String` agree with the encoded record before `Encode` runs.
 - `Record.Encode` no longer compares UAP interface values (that panicked
   for a UAP whose dynamic type is not comparable).
 - `AsterixMessage.String` no longer sorts the UAP's shared `Fields()`
-  slice in place.
+  slice in place, and for a `RecordUAPSelector` UAP (CAT001) it lists each
+  record's items with the FRNs of the layout the selector picks for that
+  record (track FRNs for a track record).
 - `RecordUAPSelector` (new in 60ee4b9): a UAP can choose the record layout
   per record; `Decode` asks it from the record bytes, `Encode` from the
   items, and FRNs follow the selected layout.
@@ -64,6 +71,15 @@ that old code fails to compile instead of reading other values.
 - I001/030 keeps every W/E value in `Values`; `W` is the first.
 - I001/170 first extent TRE; SP001 at FRN 20 of both UAPs; RFS at FRN 21
   of both UAPs is decoded.
+- SP001 (FRN 20) inside the RFS field is a decode error in both UAPs
+  (§5.3.2.16 note 4, §5.4.2.20 note 3: non-standard information goes in
+  the SP field "and not the RFS field(s)").
+- With `NewUAP12`, I001/020 inside the RFS field is a decode error: TYP
+  selects the layout and is read from I001/020 at FRN 2, so an I001/020
+  sent in the RFS field decoded a track record with the plot layout.
+  I001/020 is compulsory (§5.3.2.2, §5.4.2.2) and belongs at FRN 2.
+  `NewUAP12Plot` and `NewUAP12Track` do not select by TYP and still accept
+  it there.
 - Legacy/new field pairs must agree when both are set, or `Validate` and
   `Encode` return an error: I001/030 `W` vs `Values[0]`; I001/100
   `GrayCode` vs `FlightLevel`/`AltitudeValid` (the code must be the
@@ -81,7 +97,8 @@ that old code fails to compile instead of reading other values.
   error and an empty `Values` does not encode (§5.2.8).
 - I002/080 Warning/Error Conditions, I002/090 Collimation Error, I002/100
   Dynamic Window Type 1 and SP002 (FRN 13) are decoded (a record with
-  I002/080 failed to decode before). RFS at FRN 14 is decoded.
+  I002/080 failed to decode before). RFS at FRN 14 is decoded; SP002
+  inside the RFS field is a decode error (§5.3.2.13 note 4).
 - I002/050 and I002/060 keep every extent in `Parts`; `Status` / `Mode`
   is the first. When both are set they must agree (`Status`/`Mode` ==
   `Parts[0]`, zero counts as unset), or `Validate` and `Encode` fail.
