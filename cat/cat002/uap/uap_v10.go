@@ -45,10 +45,14 @@ func (u *UAP10) CreateDataItem(id string) (asterix.DataItem, error) {
 		return &v10.StationProcessingMode{}, nil
 	case "I002/070":
 		return &v10.PlotCountValues{}, nil
-	// TODO: Implement remaining data items
-	// case "I002/080": Warning/Error Conditions
-	// case "I002/090": Collimation Error
-	// case "I002/100": Dynamic Window - Type 1
+	case "I002/080":
+		return &v10.WarningErrorConditions{}, nil
+	case "I002/090":
+		return &v10.CollimationError{}, nil
+	case "I002/100":
+		return &v10.DynamicWindow{}, nil
+	case "SP002":
+		return &common.ExplicitField{}, nil
 	default:
 		return nil, fmt.Errorf("%w: %s", asterix.ErrUnknownDataItem, id)
 	}
@@ -153,4 +157,14 @@ var cat002Fields = []asterix.DataField{
 		Type:        asterix.Extended,
 		Mandatory:   false,
 	},
+	// FRN 12: spare
+	// FRN 13: SP indicator (ed 1.2 §5.3.2.13 note 2, LEN counts itself)
+	{
+		FRN:         13,
+		DataItem:    "SP002",
+		Description: "Special Purpose Field",
+		Type:        asterix.Explicit,
+		Mandatory:   false,
+	},
+	// FRN 14: RFS indicator (RFS is not supported)
 }

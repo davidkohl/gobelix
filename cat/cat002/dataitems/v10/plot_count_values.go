@@ -43,8 +43,8 @@ func (p *PlotCountValues) Decode(buf *bytes.Buffer) (int, error) {
 		bytesRead += n
 
 		// Extract fields
-		p.Values[i].A = (data[0] & 0x80) != 0              // bit 16
-		p.Values[i].Ident = (data[0] >> 3) & 0x1F          // bits 15-11
+		p.Values[i].A = (data[0] & 0x80) != 0                           // bit 16
+		p.Values[i].Ident = (data[0] >> 2) & 0x1F                       // bits 15-11
 		p.Values[i].Counter = uint16(data[0]&0x03)<<8 | uint16(data[1]) // bits 10-1
 	}
 
@@ -73,7 +73,7 @@ func (p *PlotCountValues) Encode(buf *bytes.Buffer) (int, error) {
 		if val.A {
 			data[0] |= 0x80
 		}
-		data[0] |= (val.Ident & 0x1F) << 3
+		data[0] |= (val.Ident & 0x1F) << 2
 		data[0] |= byte((val.Counter >> 8) & 0x03)
 
 		// Second byte: Counter low 8 bits

@@ -3,63 +3,50 @@ package v10
 import (
 	"bytes"
 	"fmt"
-
-	"github.com/davidkohl/gobelix/asterix"
 )
 
-// StationConfigurationStatus represents I002/050 - Station Configuration Status
+// StationConfigurationStatus represents I002/050 - Station Configuration Status (CAT002 ed 1.2 §5.2.6).
+// Variable length: one-octet parts, each with 7 indicator bits (8-2) and FX
+// (bit 1). The meaning of the bits is not standardised.
 type StationConfigurationStatus struct {
-	Status uint8 // Configuration status bits
+	// Status is the first part's indicator bits. Kept for compatibility; it
+	// equals Parts[0] after Decode. Encode uses it only when Parts is empty.
+	Status uint8
+	// Parts holds the 7-bit indicators of every part in order.
+	Parts []uint8
 }
 
 func (s *StationConfigurationStatus) Decode(buf *bytes.Buffer) (int, error) {
-	bytesRead := 0
-
-	var data [1]byte
-	n, err := buf.Read(data[:])
+	parts, n, err := decodeFXChain(buf, "station configuration status")
 	if err != nil {
-		return n, fmt.Errorf("reading station configuration status: %w", err)
+		return n, err
 	}
-	if n != 1 {
-		return n, fmt.Errorf("%w: need at least 1 byte for station configuration status", asterix.ErrBufferTooShort)
-	}
-	bytesRead++
-
-	// First octet: status bits (bits 8-2), FX (bit 1)
-	s.Status = (data[0] >> 1) & 0x7F
-
-	// Check FX bit for extension
-	hasFX := (data[0] & 0x01) != 0
-
-	// Handle extensions if present
-	for hasFX {
-		n, err = buf.Read(data[:])
-		if err != nil {
-			return bytesRead, fmt.Errorf("reading station configuration status extension: %w", err)
-		}
-		if n != 1 {
-			return bytesRead, fmt.Errorf("%w: incomplete station configuration status extension", asterix.ErrBufferTooShort)
-		}
-		bytesRead++
-		hasFX = (data[0] & 0x01) != 0
-	}
-
-	return bytesRead, nil
+	s.Parts = parts
+	s.Status = parts[0]
+	return n, nil
 }
 
 func (s *StationConfigurationStatus) Encode(buf *bytes.Buffer) (int, error) {
-	// First octet: status in bits 8-2, no FX
-	octet := (s.Status & 0x7F) << 1
-	if err := buf.WriteByte(octet); err != nil {
-		return 0, fmt.Errorf("writing station configuration status: %w", err)
+	if err := s.Validate(); err != nil {
+		return 0, err
 	}
-	return 1, nil
+	parts := s.Parts
+	if len(parts) == 0 {
+		parts = []uint8{s.Status}
+	}
+	return encodeFXChain(buf, parts, "station configuration status")
 }
 
 func (s *StationConfigurationStatus) Validate() error {
-	return nil
+	if err := check7Bit([]uint8{s.Status}, "station configuration status"); err != nil {
+		return err
+	}
+	return check7Bit(s.Parts, "station configuration status")
 }
 
 func (s *StationConfigurationStatus) String() string {
+	if len(s.Parts) > 1 {
+		return fmt.Sprintf("Status: % 02X", s.Parts)
+	}
 	return fmt.Sprintf("Status: %02X", s.Status)
 }

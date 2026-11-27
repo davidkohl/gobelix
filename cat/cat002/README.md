@@ -14,7 +14,7 @@ Category 002 is used for transmission of monoradar service messages. These messa
 
 ## Implementation
 
-The implementation follows the ASTERIX Category 002 specification version 1.0. It includes:
+The implementation follows the ASTERIX Category 002 specification edition 1.2 (UAP version 1.0). It includes:
 
 - Complete User Application Profile (UAP) definition
 - All mandatory and optional data items
@@ -35,6 +35,9 @@ The implementation follows the ASTERIX Category 002 specification version 1.0. I
 | 9   | I002/100   | Dynamic Window - Type 1          | Fixed    | 8      | No        |
 | 10  | I002/090   | Collimation Error                | Fixed    | 2      | No        |
 | 11  | I002/080   | Warning/Error Conditions         | Extended | 1+     | No        |
+| 13  | SP002      | Special Purpose Field            | Explicit | 1+     | No        |
+
+FRN 14 (RFS) is not supported.
 
 ## Message Types
 
@@ -70,3 +73,5 @@ if err != nil {
 - Sector Azimuth: 360°/256 (approximately 1.41°)
 - Antenna Rotation Period: 1/128 seconds
 - Time: 1/128 seconds since midnight UTC
+- Collimation error (I002/090): range 1/128 NM, azimuth 360°/2^14 (f = 2)
+- Dynamic window (I002/100): rho 1/128 NM, theta 360°/2^16
