@@ -68,11 +68,57 @@ func (r *Record) GetDataItem(id string) (DataItem, bool) {
 	return item, exists
 }
 
+// RecordUAPSelector is implemented by a UAP that stands for several
+// record layouts of one category edition, where the layout of each record is
+// chosen by the content of the record itself. CAT001 is the case in point:
+// I001/020 TYP selects the plot UAP or the track UAP (CAT001 ed 1.4 §4.2.2).
+//
+// Record.Decode asks SelectDecodeUAP for the layout before reading the items;
+// Record.Encode asks SelectEncodeUAP and rebuilds the FSPEC against the
+// selected layout, so FRNs are always those of the selected UAP.
+type RecordUAPSelector interface {
+	UAP
+	// SelectDecodeUAP returns the UAP for the record whose encoding starts at
+	// data[0] (the first FSPEC octet). It must not retain data.
+	SelectDecodeUAP(data []byte) (UAP, error)
+	// SelectEncodeUAP returns the UAP for a record holding these items.
+	SelectEncodeUAP(items map[string]DataItem) (UAP, error)
+}
+
+// encodeUAP returns the UAP that lays out this record when it is encoded.
+func (r *Record) encodeUAP() (UAP, error) {
+	if sel, ok := r.uap.(RecordUAPSelector); ok {
+		return sel.SelectEncodeUAP(r.items)
+	}
+	return r.uap, nil
+}
+
 // Encode writes the record to a buffer
 func (r *Record) Encode(buf *bytes.Buffer) (int, error) {
-	// Validate the record against UAP rules
-	if err := r.uap.Validate(r.items); err != nil {
+	uap, err := r.encodeUAP()
+	if err != nil {
 		return 0, err
+	}
+
+	// Validate the record against UAP rules
+	if err := uap.Validate(r.items); err != nil {
+		return 0, err
+	}
+
+	if uap != r.uap {
+		// FRNs depend on the selected layout: rebuild the FSPEC against it.
+		fspec := NewFSPEC()
+		for id := range r.items {
+			field, ok := uap.GetFieldByDataItem(id)
+			if !ok {
+				return 0, NewEncodingError(r.category, id,
+					"item not defined in the UAP selected for this record", ErrUnknownDataItem)
+			}
+			if err := fspec.SetFRN(field.FRN); err != nil {
+				return 0, err
+			}
+		}
+		r.fspec = fspec
 	}
 
 	bytesWritten := 0
@@ -85,7 +131,7 @@ func (r *Record) Encode(buf *bytes.Buffer) (int, error) {
 	bytesWritten += n
 
 	// Write items in FRN order
-	for _, field := range r.uap.Fields() {
+	for _, field := range uap.Fields() {
 		if !r.fspec.GetFRN(field.FRN) {
 			continue
 		}
@@ -123,6 +169,15 @@ func (r *Record) Decode(buf *bytes.Buffer) (int, error) {
 
 	bytesRead := 0
 
+	uap := r.uap
+	if sel, ok := r.uap.(RecordUAPSelector); ok {
+		selected, err := sel.SelectDecodeUAP(buf.Bytes())
+		if err != nil {
+			return 0, NewDecodeError(r.category, "", "selecting record UAP", err)
+		}
+		uap = selected
+	}
+
 	// Read FSPEC
 	n, err := r.fspec.Decode(buf)
 	if err != nil {
@@ -141,13 +196,13 @@ func (r *Record) Decode(buf *bytes.Buffer) (int, error) {
 	}
 
 	// Read items based on FSPEC
-	for _, field := range r.uap.Fields() {
+	for _, field := range uap.Fields() {
 		if !r.fspec.GetFRN(field.FRN) {
 			continue
 		}
 
 		// Create data item
-		item, err := r.uap.CreateDataItem(field.DataItem)
+		item, err := uap.CreateDataItem(field.DataItem)
 		if err != nil {
 			// For fixed length items, skip over the bytes if we can't create the item
 			// This is intentional for forward compatibility - unknown fields are silently skipped
@@ -193,7 +248,7 @@ func (r *Record) Decode(buf *bytes.Buffer) (int, error) {
 	}
 
 	// Validate the record
-	if err := r.uap.Validate(r.items); err != nil {
+	if err := uap.Validate(r.items); err != nil {
 		return bytesRead, err
 	}
 
@@ -238,8 +293,13 @@ func (r *Record) HasDataItem(id string) bool {
 func (r *Record) EstimateSize() int {
 	size := r.fspec.Size() // FSPEC size
 
+	uap, err := r.encodeUAP()
+	if err != nil {
+		uap = r.uap
+	}
+
 	// Add size of each data item
-	for _, field := range r.uap.Fields() {
+	for _, field := range uap.Fields() {
 		if !r.fspec.GetFRN(field.FRN) {
 			continue
 		}
