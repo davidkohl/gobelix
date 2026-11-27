@@ -36,6 +36,8 @@ The implementation follows the ASTERIX Category 034 specification version 1.29. 
 | 10  | I034/110   | Data Filter                     | Fixed    | 1      | No        |
 | 11  | I034/120   | 3D Position of Data Source      | Fixed    | 8      | No        |
 | 12  | I034/090   | Collimation Error               | Fixed    | 2      | No        |
+| 13  | RE         | Reserved Expansion Field        | Explicit | 1+     | No        |
+| 14  | SP         | Special Purpose Field           | Explicit | 1+     | No        |
 
 ## Message Types
 
@@ -43,6 +45,9 @@ The implementation follows the ASTERIX Category 034 specification version 1.29. 
 - 2: Sector Crossing message
 - 3: Geographical Filtering message
 - 4: Jamming Strobe message
+- 5: Solar Storm message
+- 6: SSR Jamming Strobe message
+- 7: Mode S Jamming Strobe message
 
 ## Usage
 
@@ -70,4 +75,6 @@ if err != nil {
 - Sector Azimuth: 360°/256 (approximately 1.41°)
 - Antenna Rotation Period: 1/128 seconds
 - Time: 1/128 seconds since midnight UTC
-- Collimation Error: 0.022° for azimuth, 1/256 NM for range
+- Collimation Error (I034/090): range 1/128 NM, azimuth 360°/2^14 (≈ 0.022°)
+- Generic Polar Window (I034/100): rho 1/256 NM, theta 360°/2^16
+- 3D Position (I034/120): height 1 m, latitude/longitude 180°/2^23

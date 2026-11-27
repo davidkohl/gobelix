@@ -45,8 +45,17 @@ func (u *UAP129) CreateDataItem(id string) (asterix.DataItem, error) {
 		return v129.NewSystemProcessingMode(), nil
 	case "I034/070":
 		return &v129.MessageCountValues{}, nil
+	case "I034/090":
+		return &v129.CollimationError{}, nil
+	case "I034/100":
+		return &v129.GenericPolarWindow{}, nil
+	case "I034/110":
+		return &v129.DataFilter{}, nil
 	case "I034/120":
 		return v129.NewDataSourcePosition(), nil
+	case "RE", "SP":
+		// Content not defined by ed 1.29; LEN counts itself.
+		return &common.ExplicitField{}, nil
 	default:
 		return nil, fmt.Errorf("%w: %s", asterix.ErrUnknownDataItem, id)
 	}

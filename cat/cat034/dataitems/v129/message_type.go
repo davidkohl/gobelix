@@ -11,7 +11,10 @@ import (
 // MessageType represents I034/000 - Message Type
 // Fixed length: 1 byte
 type MessageType struct {
-	MessageType uint8 // 1=North marker, 2=Sector crossing, 3=South marker, 4=New sector
+	// MessageType per ed 1.29 §5.2.1: 1 North marker, 2 sector crossing,
+	// 3 geographical filtering, 4 jamming strobe, 5 solar storm,
+	// 6 SSR jamming strobe, 7 Mode S jamming strobe.
+	MessageType uint8
 }
 
 // NewMessageType creates a new Message Type data item
@@ -46,8 +49,8 @@ func (m *MessageType) Encode(buf *bytes.Buffer) (int, error) {
 
 // Validate validates the Message Type
 func (m *MessageType) Validate() error {
-	if m.MessageType < 1 || m.MessageType > 4 {
-		return fmt.Errorf("%w: message type must be 1-4, got %d", asterix.ErrInvalidMessage, m.MessageType)
+	if m.MessageType < 1 || m.MessageType > 7 {
+		return fmt.Errorf("%w: message type must be 1-7, got %d", asterix.ErrInvalidMessage, m.MessageType)
 	}
 	return nil
 }
@@ -57,8 +60,11 @@ func (m *MessageType) String() string {
 	types := map[uint8]string{
 		1: "North Marker",
 		2: "Sector Crossing",
-		3: "South Marker",
-		4: "New Sector",
+		3: "Geographical Filtering",
+		4: "Jamming Strobe",
+		5: "Solar Storm",
+		6: "SSR Jamming Strobe",
+		7: "Mode S Jamming Strobe",
 	}
 	if name, ok := types[m.MessageType]; ok {
 		return name

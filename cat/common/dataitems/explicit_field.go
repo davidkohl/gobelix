@@ -30,7 +30,8 @@ func (e *ExplicitField) Decode(buf *bytes.Buffer) (int, error) {
 	if buf.Len() < n {
 		return 1, fmt.Errorf("%w: explicit field LEN %d needs %d octets, have %d", asterix.ErrBufferTooShort, l, n, buf.Len())
 	}
-	e.Payload = append([]byte(nil), buf.Next(n)...)
+	e.Payload = make([]byte, n)
+	copy(e.Payload, buf.Next(n))
 	return 1 + n, nil
 }
 
