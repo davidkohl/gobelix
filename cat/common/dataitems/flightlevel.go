@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"math"
 )
 
 type FlightLevel struct {
@@ -23,7 +24,7 @@ func (f *FlightLevel) Encode(buf *bytes.Buffer) (int, error) {
 	}
 
 	// Convert to 1/4 FL units and to int16
-	flUnits := int16(f.Value / FlightLevelResolution)
+	flUnits := int16(math.Round(f.Value / FlightLevelResolution))
 	err := binary.Write(buf, binary.BigEndian, flUnits)
 	if err != nil {
 		return 0, fmt.Errorf("writing flight level: %w", err)

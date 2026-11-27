@@ -4,6 +4,7 @@ package common
 import (
 	"bytes"
 	"fmt"
+	"math"
 
 	"github.com/davidkohl/gobelix/asterix"
 )
@@ -40,7 +41,7 @@ func (s *SectorNumber) Encode(buf *bytes.Buffer) (int, error) {
 	}
 
 	// Convert from degrees to 0-255
-	value := uint8((s.SectorNumber / 360.0) * 256.0)
+	value := uint8(int64(math.Round(s.SectorNumber/360.0*256.0)) & 0xFF)
 
 	if err := buf.WriteByte(value); err != nil {
 		return 0, fmt.Errorf("writing sector number: %w", err)

@@ -3,6 +3,7 @@ package v10
 import (
 	"bytes"
 	"fmt"
+	"math"
 
 	"github.com/davidkohl/gobelix/asterix"
 )
@@ -27,7 +28,7 @@ func (a *AntennaRotationSpeed) Decode(buf *bytes.Buffer) (int, error) {
 }
 
 func (a *AntennaRotationSpeed) Encode(buf *bytes.Buffer) (int, error) {
-	raw := uint16(a.RotationPeriod * 128.0)
+	raw := uint16(math.Round(a.RotationPeriod * 128.0))
 	if err := buf.WriteByte(byte(raw >> 8)); err != nil {
 		return 0, fmt.Errorf("writing antenna rotation speed MSB: %w", err)
 	}

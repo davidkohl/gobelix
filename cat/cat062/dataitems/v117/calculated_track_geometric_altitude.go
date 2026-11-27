@@ -4,6 +4,7 @@ package v117
 import (
 	"bytes"
 	"fmt"
+	"math"
 
 	"github.com/davidkohl/gobelix/asterix"
 )
@@ -38,7 +39,7 @@ func (c *CalculatedTrackGeometricAltitude) Encode(buf *bytes.Buffer) (int, error
 	}
 
 	// Convert to raw value
-	raw := int16(c.Altitude / 6.25)
+	raw := int16(math.Round(c.Altitude / 6.25))
 
 	data := []byte{
 		byte(raw >> 8),

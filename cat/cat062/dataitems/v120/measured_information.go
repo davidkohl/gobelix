@@ -4,6 +4,7 @@ package v120
 import (
 	"bytes"
 	"fmt"
+	"math"
 	"strings"
 )
 
@@ -454,7 +455,7 @@ func (m *MeasuredInformation) encodeModeC(buf *bytes.Buffer) (int, error) {
 
 	if m.ModeCAltitude != nil {
 		// Convert altitude from feet to 1/4 FL units (LSB = 25 ft)
-		modeCValue := int16(*m.ModeCAltitude / 100.0 / 0.25)
+		modeCValue := int16(math.Round(*m.ModeCAltitude / 25.0))
 
 		// Pack into 14 bits (already in two's complement form)
 		modeCBits := uint16(modeCValue) & 0x3FFF

@@ -3,6 +3,7 @@ package v12
 import (
 	"bytes"
 	"fmt"
+	"math"
 
 	"github.com/davidkohl/gobelix/asterix"
 )
@@ -29,7 +30,7 @@ func (t *TruncatedTimeOfDay) Decode(buf *bytes.Buffer) (int, error) {
 
 func (t *TruncatedTimeOfDay) Encode(buf *bytes.Buffer) (int, error) {
 	// Convert to 1/128 second units
-	raw := uint16(t.Time * 128.0)
+	raw := uint16(int64(math.Round(t.Time*128.0)) & 0xFFFF)
 
 	buf.WriteByte(byte(raw >> 8))
 	buf.WriteByte(byte(raw & 0xFF))

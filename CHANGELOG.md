@@ -137,6 +137,18 @@ that old code fails to compile instead of reading other values.
 
 ### CAT062 (ed 1.17, 1.20)
 
+- Encoders round a physical value to the nearest LSB, half away from
+  zero (`math.Round`), instead of truncating towards zero: I062/130,
+  I062/135, I062/136 and the I062/340 Mode C in both editions; in 1.17
+  also I062/500 (all subfields, saturated at the largest value), I062/340
+  range, azimuth and 3-D height, I062/380 heading, speeds, selected
+  altitudes, trajectory intent and met data, I062/390 cleared flight level
+  and the I062/290 and I062/295 ages; in 1.20 the I062/380 trajectory
+  intent altitude. A value that was not a multiple of the LSB used to
+  read up to one LSB low (for example 25 ft at I062/135). Angles wrap
+  modulo 360° instead of overflowing.
+- 1.17 I062/340 3-D height decodes as two's complement (a negative
+  height read as about 1.6 million ft).
 - SP062 (1.20) and RE062 (1.17, 1.20): LEN counts itself (ASTERIX Part 1
   §4.3.5). The decoders read LEN octets after the length octet, one too
   many, so the next item or record was misaligned. LEN = 0 and a LEN
@@ -147,6 +159,14 @@ that old code fails to compile instead of reading other values.
   payload.
 - A set FSPEC bit for a spare FRN (for example FRN 2) or an FRN beyond the
   UAP is a decode error (FSPEC check above).
+
+### Rounding of other encoders
+
+- Encoders round to the nearest LSB, half away from zero, instead of
+  truncating: the common I0xx/140 time of day and I0xx/020 sector number
+  (sector wraps at 360°), I048/090 flight level (ed 1.32), I001/040
+  polar position (azimuth wraps), I001/090 Mode C and I001/141 truncated
+  time (wraps), I002/041 antenna rotation period. Decoding is unchanged.
 
 ### CAT021 (ed 2.6)
 

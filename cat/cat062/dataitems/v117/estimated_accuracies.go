@@ -4,6 +4,7 @@ package v117
 import (
 	"bytes"
 	"fmt"
+	"math"
 	"strings"
 )
 
@@ -329,8 +330,8 @@ func (e *EstimatedAccuracies) Encode(buf *bytes.Buffer) (int, error) {
 	// Subfield #1: Estimated Accuracy Of Track Position (Cartesian)
 	if hasPosition {
 		// Convert to binary (0.5m resolution)
-		xAccBits := uint16(*e.PositionAccuracyX / 0.5)
-		yAccBits := uint16(*e.PositionAccuracyY / 0.5)
+		xAccBits := uint16(min(math.Round(*e.PositionAccuracyX/0.5), 0xFFFF))
+		yAccBits := uint16(min(math.Round(*e.PositionAccuracyY/0.5), 0xFFFF))
 
 		data := []byte{
 			byte(xAccBits >> 8),
@@ -349,7 +350,7 @@ func (e *EstimatedAccuracies) Encode(buf *bytes.Buffer) (int, error) {
 	if hasCovariance {
 		// Convert to binary (0.5m resolution)
 		var covBits uint16
-		covValue := int16(*e.Covariance / 0.5)
+		covValue := int16(math.Round(*e.Covariance / 0.5))
 		if covValue < 0 {
 			// Two's complement for negative values
 			covBits = uint16(^(-covValue) + 1)
@@ -371,8 +372,8 @@ func (e *EstimatedAccuracies) Encode(buf *bytes.Buffer) (int, error) {
 	// Subfield #3: Estimated Accuracy Of Track Position (WGS-84)
 	if hasWGS84Position {
 		// Convert to binary (180/2^25 degrees resolution)
-		latAccBits := uint16(*e.PositionAccuracyLat * float64(1<<25) / 180.0)
-		lonAccBits := uint16(*e.PositionAccuracyLon * float64(1<<25) / 180.0)
+		latAccBits := uint16(min(math.Round(*e.PositionAccuracyLat*float64(1<<25)/180.0), 0xFFFF))
+		lonAccBits := uint16(min(math.Round(*e.PositionAccuracyLon*float64(1<<25)/180.0), 0xFFFF))
 
 		data := []byte{
 			byte(latAccBits >> 8),
@@ -390,7 +391,7 @@ func (e *EstimatedAccuracies) Encode(buf *bytes.Buffer) (int, error) {
 	// Subfield #4: Estimated Accuracy Of Calculated Track Geometric Altitude
 	if hasGeoAltitude {
 		// Convert to binary (6.25 feet resolution)
-		altAccBits := uint8(*e.GeometricAltitudeAccuracy / 6.25)
+		altAccBits := uint8(min(math.Round(*e.GeometricAltitudeAccuracy/6.25), 0xFF))
 
 		err := buf.WriteByte(altAccBits)
 		if err != nil {
@@ -402,7 +403,7 @@ func (e *EstimatedAccuracies) Encode(buf *bytes.Buffer) (int, error) {
 	// Subfield #5: Estimated Accuracy Of Calculated Track Barometric Altitude
 	if hasBaroAltitude {
 		// Convert to binary (1/4 FL resolution)
-		altAccBits := uint8(*e.BarometricAltitudeAccuracy / 0.25)
+		altAccBits := uint8(min(math.Round(*e.BarometricAltitudeAccuracy/0.25), 0xFF))
 
 		err := buf.WriteByte(altAccBits)
 		if err != nil {
@@ -414,8 +415,8 @@ func (e *EstimatedAccuracies) Encode(buf *bytes.Buffer) (int, error) {
 	// Subfield #6: Estimated Accuracy Of Track Velocity (Cartesian)
 	if hasVelocity {
 		// Convert to binary (0.25 m/s resolution)
-		xAccBits := uint8(*e.VelocityAccuracyX / 0.25)
-		yAccBits := uint8(*e.VelocityAccuracyY / 0.25)
+		xAccBits := uint8(min(math.Round(*e.VelocityAccuracyX/0.25), 0xFF))
+		yAccBits := uint8(min(math.Round(*e.VelocityAccuracyY/0.25), 0xFF))
 
 		data := []byte{xAccBits, yAccBits}
 		n, err := buf.Write(data)
@@ -428,8 +429,8 @@ func (e *EstimatedAccuracies) Encode(buf *bytes.Buffer) (int, error) {
 	// Subfield #7: Estimated Accuracy Of Acceleration (Cartesian)
 	if hasAcceleration {
 		// Convert to binary (0.25 m/s² resolution)
-		xAccBits := uint8(*e.AccelerationAccuracyX / 0.25)
-		yAccBits := uint8(*e.AccelerationAccuracyY / 0.25)
+		xAccBits := uint8(min(math.Round(*e.AccelerationAccuracyX/0.25), 0xFF))
+		yAccBits := uint8(min(math.Round(*e.AccelerationAccuracyY/0.25), 0xFF))
 
 		data := []byte{xAccBits, yAccBits}
 		n, err := buf.Write(data)
@@ -442,7 +443,7 @@ func (e *EstimatedAccuracies) Encode(buf *bytes.Buffer) (int, error) {
 	// Subfield #8: Estimated Accuracy Of Rate Of Climb/Descent
 	if hasRateOfClimb {
 		// Convert to binary (6.25 feet/minute resolution)
-		rocAccBits := uint8(*e.RateOfClimbAccuracy / 6.25)
+		rocAccBits := uint8(min(math.Round(*e.RateOfClimbAccuracy/6.25), 0xFF))
 
 		err := buf.WriteByte(rocAccBits)
 		if err != nil {

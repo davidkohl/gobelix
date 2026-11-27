@@ -4,6 +4,7 @@ package v117
 import (
 	"bytes"
 	"fmt"
+	"math"
 	"strings"
 )
 
@@ -862,7 +863,7 @@ func (t *TrackDataAges) Encode(buf *bytes.Buffer) (int, error) {
 
 	// First FSPEC byte fields
 	if hasMFL {
-		val := uint8(min(*t.MFLAge/0.25, 255))
+		val := uint8(math.Round(min(*t.MFLAge/0.25, 255)))
 		err := buf.WriteByte(val)
 		if err != nil {
 			return bytesWritten, fmt.Errorf("writing MFL age: %w", err)
@@ -871,7 +872,7 @@ func (t *TrackDataAges) Encode(buf *bytes.Buffer) (int, error) {
 	}
 
 	if hasMD1 {
-		val := uint8(min(*t.MD1Age/0.25, 255))
+		val := uint8(math.Round(min(*t.MD1Age/0.25, 255)))
 		err := buf.WriteByte(val)
 		if err != nil {
 			return bytesWritten, fmt.Errorf("writing MD1 age: %w", err)
@@ -880,7 +881,7 @@ func (t *TrackDataAges) Encode(buf *bytes.Buffer) (int, error) {
 	}
 
 	if hasMD2 {
-		val := uint8(min(*t.MD2Age/0.25, 255))
+		val := uint8(math.Round(min(*t.MD2Age/0.25, 255)))
 		err := buf.WriteByte(val)
 		if err != nil {
 			return bytesWritten, fmt.Errorf("writing MD2 age: %w", err)
@@ -889,7 +890,7 @@ func (t *TrackDataAges) Encode(buf *bytes.Buffer) (int, error) {
 	}
 
 	if hasMDA {
-		val := uint8(min(*t.MDAAge/0.25, 255))
+		val := uint8(math.Round(min(*t.MDAAge/0.25, 255)))
 		err := buf.WriteByte(val)
 		if err != nil {
 			return bytesWritten, fmt.Errorf("writing MDA age: %w", err)
@@ -898,7 +899,7 @@ func (t *TrackDataAges) Encode(buf *bytes.Buffer) (int, error) {
 	}
 
 	if hasMD4 {
-		val := uint8(min(*t.MD4Age/0.25, 255))
+		val := uint8(math.Round(min(*t.MD4Age/0.25, 255)))
 		err := buf.WriteByte(val)
 		if err != nil {
 			return bytesWritten, fmt.Errorf("writing MD4 age: %w", err)
@@ -907,7 +908,7 @@ func (t *TrackDataAges) Encode(buf *bytes.Buffer) (int, error) {
 	}
 
 	if hasMD5 {
-		val := uint8(min(*t.MD5Age/0.25, 255))
+		val := uint8(math.Round(min(*t.MD5Age/0.25, 255)))
 		err := buf.WriteByte(val)
 		if err != nil {
 			return bytesWritten, fmt.Errorf("writing MD5 age: %w", err)
@@ -916,7 +917,7 @@ func (t *TrackDataAges) Encode(buf *bytes.Buffer) (int, error) {
 	}
 
 	if hasMHG {
-		val := uint8(min(*t.MHGAge/0.25, 255))
+		val := uint8(math.Round(min(*t.MHGAge/0.25, 255)))
 		err := buf.WriteByte(val)
 		if err != nil {
 			return bytesWritten, fmt.Errorf("writing MHG age: %w", err)
@@ -926,7 +927,7 @@ func (t *TrackDataAges) Encode(buf *bytes.Buffer) (int, error) {
 
 	// Second FSPEC byte fields
 	if hasIAS {
-		val := uint8(min(*t.IASAge/0.25, 255))
+		val := uint8(math.Round(min(*t.IASAge/0.25, 255)))
 		err := buf.WriteByte(val)
 		if err != nil {
 			return bytesWritten, fmt.Errorf("writing IAS age: %w", err)
@@ -935,7 +936,7 @@ func (t *TrackDataAges) Encode(buf *bytes.Buffer) (int, error) {
 	}
 
 	if hasTAS {
-		val := uint8(min(*t.TASAge/0.25, 255))
+		val := uint8(math.Round(min(*t.TASAge/0.25, 255)))
 		err := buf.WriteByte(val)
 		if err != nil {
 			return bytesWritten, fmt.Errorf("writing TAS age: %w", err)
@@ -944,7 +945,7 @@ func (t *TrackDataAges) Encode(buf *bytes.Buffer) (int, error) {
 	}
 
 	if hasSAL {
-		val := uint8(min(*t.SALAge/0.25, 255))
+		val := uint8(math.Round(min(*t.SALAge/0.25, 255)))
 		err := buf.WriteByte(val)
 		if err != nil {
 			return bytesWritten, fmt.Errorf("writing SAL age: %w", err)
@@ -953,7 +954,7 @@ func (t *TrackDataAges) Encode(buf *bytes.Buffer) (int, error) {
 	}
 
 	if hasFSS {
-		val := uint8(min(*t.FSSAge/0.25, 255))
+		val := uint8(math.Round(min(*t.FSSAge/0.25, 255)))
 		err := buf.WriteByte(val)
 		if err != nil {
 			return bytesWritten, fmt.Errorf("writing FSS age: %w", err)
@@ -962,7 +963,7 @@ func (t *TrackDataAges) Encode(buf *bytes.Buffer) (int, error) {
 	}
 
 	if hasTID {
-		val := uint8(min(*t.TIDAge/0.25, 255))
+		val := uint8(math.Round(min(*t.TIDAge/0.25, 255)))
 		err := buf.WriteByte(val)
 		if err != nil {
 			return bytesWritten, fmt.Errorf("writing TID age: %w", err)
@@ -971,7 +972,7 @@ func (t *TrackDataAges) Encode(buf *bytes.Buffer) (int, error) {
 	}
 
 	if hasCOM {
-		val := uint8(min(*t.COMAge/0.25, 255))
+		val := uint8(math.Round(min(*t.COMAge/0.25, 255)))
 		err := buf.WriteByte(val)
 		if err != nil {
 			return bytesWritten, fmt.Errorf("writing COM age: %w", err)
@@ -980,7 +981,7 @@ func (t *TrackDataAges) Encode(buf *bytes.Buffer) (int, error) {
 	}
 
 	if hasSAB {
-		val := uint8(min(*t.SABAge/0.25, 255))
+		val := uint8(math.Round(min(*t.SABAge/0.25, 255)))
 		err := buf.WriteByte(val)
 		if err != nil {
 			return bytesWritten, fmt.Errorf("writing SAB age: %w", err)
@@ -990,7 +991,7 @@ func (t *TrackDataAges) Encode(buf *bytes.Buffer) (int, error) {
 
 	// Third FSPEC byte fields
 	if hasACS {
-		val := uint8(min(*t.ACSAge/0.25, 255))
+		val := uint8(math.Round(min(*t.ACSAge/0.25, 255)))
 		err := buf.WriteByte(val)
 		if err != nil {
 			return bytesWritten, fmt.Errorf("writing ACS age: %w", err)
@@ -999,7 +1000,7 @@ func (t *TrackDataAges) Encode(buf *bytes.Buffer) (int, error) {
 	}
 
 	if hasBVR {
-		val := uint8(min(*t.BVRAge/0.25, 255))
+		val := uint8(math.Round(min(*t.BVRAge/0.25, 255)))
 		err := buf.WriteByte(val)
 		if err != nil {
 			return bytesWritten, fmt.Errorf("writing BVR age: %w", err)
@@ -1008,7 +1009,7 @@ func (t *TrackDataAges) Encode(buf *bytes.Buffer) (int, error) {
 	}
 
 	if hasGVR {
-		val := uint8(min(*t.GVRAge/0.25, 255))
+		val := uint8(math.Round(min(*t.GVRAge/0.25, 255)))
 		err := buf.WriteByte(val)
 		if err != nil {
 			return bytesWritten, fmt.Errorf("writing GVR age: %w", err)
@@ -1017,7 +1018,7 @@ func (t *TrackDataAges) Encode(buf *bytes.Buffer) (int, error) {
 	}
 
 	if hasRAN {
-		val := uint8(min(*t.RANAge/0.25, 255))
+		val := uint8(math.Round(min(*t.RANAge/0.25, 255)))
 		err := buf.WriteByte(val)
 		if err != nil {
 			return bytesWritten, fmt.Errorf("writing RAN age: %w", err)
@@ -1026,7 +1027,7 @@ func (t *TrackDataAges) Encode(buf *bytes.Buffer) (int, error) {
 	}
 
 	if hasTAR {
-		val := uint8(min(*t.TARAge/0.25, 255))
+		val := uint8(math.Round(min(*t.TARAge/0.25, 255)))
 		err := buf.WriteByte(val)
 		if err != nil {
 			return bytesWritten, fmt.Errorf("writing TAR age: %w", err)
@@ -1035,7 +1036,7 @@ func (t *TrackDataAges) Encode(buf *bytes.Buffer) (int, error) {
 	}
 
 	if hasTAN {
-		val := uint8(min(*t.TANAge/0.25, 255))
+		val := uint8(math.Round(min(*t.TANAge/0.25, 255)))
 		err := buf.WriteByte(val)
 		if err != nil {
 			return bytesWritten, fmt.Errorf("writing TAN age: %w", err)
@@ -1044,7 +1045,7 @@ func (t *TrackDataAges) Encode(buf *bytes.Buffer) (int, error) {
 	}
 
 	if hasGSP {
-		val := uint8(min(*t.GSPAge/0.25, 255))
+		val := uint8(math.Round(min(*t.GSPAge/0.25, 255)))
 		err := buf.WriteByte(val)
 		if err != nil {
 			return bytesWritten, fmt.Errorf("writing GSP age: %w", err)
@@ -1054,7 +1055,7 @@ func (t *TrackDataAges) Encode(buf *bytes.Buffer) (int, error) {
 
 	// Fourth FSPEC byte fields
 	if hasVUN {
-		val := uint8(min(*t.VUNAge/0.25, 255))
+		val := uint8(math.Round(min(*t.VUNAge/0.25, 255)))
 		err := buf.WriteByte(val)
 		if err != nil {
 			return bytesWritten, fmt.Errorf("writing VUN age: %w", err)
@@ -1063,7 +1064,7 @@ func (t *TrackDataAges) Encode(buf *bytes.Buffer) (int, error) {
 	}
 
 	if hasMET {
-		val := uint8(min(*t.METAge/0.25, 255))
+		val := uint8(math.Round(min(*t.METAge/0.25, 255)))
 		err := buf.WriteByte(val)
 		if err != nil {
 			return bytesWritten, fmt.Errorf("writing MET age: %w", err)
@@ -1072,7 +1073,7 @@ func (t *TrackDataAges) Encode(buf *bytes.Buffer) (int, error) {
 	}
 
 	if hasEMC {
-		val := uint8(min(*t.EMCAge/0.25, 255))
+		val := uint8(math.Round(min(*t.EMCAge/0.25, 255)))
 		err := buf.WriteByte(val)
 		if err != nil {
 			return bytesWritten, fmt.Errorf("writing EMC age: %w", err)
@@ -1081,7 +1082,7 @@ func (t *TrackDataAges) Encode(buf *bytes.Buffer) (int, error) {
 	}
 
 	if hasPOS {
-		val := uint8(min(*t.POSAge/0.25, 255))
+		val := uint8(math.Round(min(*t.POSAge/0.25, 255)))
 		err := buf.WriteByte(val)
 		if err != nil {
 			return bytesWritten, fmt.Errorf("writing POS age: %w", err)
@@ -1090,7 +1091,7 @@ func (t *TrackDataAges) Encode(buf *bytes.Buffer) (int, error) {
 	}
 
 	if hasGAL {
-		val := uint8(min(*t.GALAge/0.25, 255))
+		val := uint8(math.Round(min(*t.GALAge/0.25, 255)))
 		err := buf.WriteByte(val)
 		if err != nil {
 			return bytesWritten, fmt.Errorf("writing GAL age: %w", err)
@@ -1099,7 +1100,7 @@ func (t *TrackDataAges) Encode(buf *bytes.Buffer) (int, error) {
 	}
 
 	if hasPUN {
-		val := uint8(min(*t.PUNAge/0.25, 255))
+		val := uint8(math.Round(min(*t.PUNAge/0.25, 255)))
 		err := buf.WriteByte(val)
 		if err != nil {
 			return bytesWritten, fmt.Errorf("writing PUN age: %w", err)
@@ -1108,7 +1109,7 @@ func (t *TrackDataAges) Encode(buf *bytes.Buffer) (int, error) {
 	}
 
 	if hasMB {
-		val := uint8(min(*t.MBAge/0.25, 255))
+		val := uint8(math.Round(min(*t.MBAge/0.25, 255)))
 		err := buf.WriteByte(val)
 		if err != nil {
 			return bytesWritten, fmt.Errorf("writing MB age: %w", err)
@@ -1118,7 +1119,7 @@ func (t *TrackDataAges) Encode(buf *bytes.Buffer) (int, error) {
 
 	// Fifth FSPEC byte fields
 	if hasIAR {
-		val := uint8(min(*t.IARAge/0.25, 255))
+		val := uint8(math.Round(min(*t.IARAge/0.25, 255)))
 		err := buf.WriteByte(val)
 		if err != nil {
 			return bytesWritten, fmt.Errorf("writing IAR age: %w", err)
@@ -1127,7 +1128,7 @@ func (t *TrackDataAges) Encode(buf *bytes.Buffer) (int, error) {
 	}
 
 	if hasMAC {
-		val := uint8(min(*t.MACAge/0.25, 255))
+		val := uint8(math.Round(min(*t.MACAge/0.25, 255)))
 		err := buf.WriteByte(val)
 		if err != nil {
 			return bytesWritten, fmt.Errorf("writing MAC age: %w", err)
@@ -1136,7 +1137,7 @@ func (t *TrackDataAges) Encode(buf *bytes.Buffer) (int, error) {
 	}
 
 	if hasBPS {
-		val := uint8(min(*t.BPSAge/0.25, 255))
+		val := uint8(math.Round(min(*t.BPSAge/0.25, 255)))
 		err := buf.WriteByte(val)
 		if err != nil {
 			return bytesWritten, fmt.Errorf("writing BPS age: %w", err)

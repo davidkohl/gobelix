@@ -4,6 +4,7 @@ package v117
 import (
 	"bytes"
 	"fmt"
+	"math"
 
 	"github.com/davidkohl/gobelix/asterix"
 )
@@ -37,7 +38,7 @@ func (m *MeasuredFlightLevel) Encode(buf *bytes.Buffer) (int, error) {
 	}
 
 	// Convert to raw value
-	raw := int16(m.FlightLevel / 0.25)
+	raw := int16(math.Round(m.FlightLevel / 0.25))
 
 	data := []byte{
 		byte(raw >> 8),

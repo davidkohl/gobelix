@@ -4,6 +4,7 @@ package v12
 import (
 	"bytes"
 	"fmt"
+	"math"
 
 	"github.com/davidkohl/gobelix/asterix"
 )
@@ -41,10 +42,10 @@ func (p *PositionPolar) Encode(buf *bytes.Buffer) (int, error) {
 	}
 
 	// RHO: convert NM to 1/128 NM units
-	rho := uint16(p.RHO * 128.0)
+	rho := uint16(min(math.Round(p.RHO*128.0), 0xFFFF))
 
 	// THETA: convert degrees to (360/2^16) units
-	theta := uint16(p.THETA * 65536.0 / 360.0)
+	theta := uint16(int64(math.Round(p.THETA*65536.0/360.0)) & 0xFFFF)
 
 	data := []byte{
 		byte(rho >> 8),

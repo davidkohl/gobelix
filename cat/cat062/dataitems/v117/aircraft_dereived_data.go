@@ -4,6 +4,7 @@ package v117
 import (
 	"bytes"
 	"fmt"
+	"math"
 	"strings"
 )
 
@@ -1081,7 +1082,7 @@ func (a *AircraftDerivedData) Encode(buf *bytes.Buffer) (int, error) {
 	// FRN 3: Magnetic Heading
 	if a.MagneticHeading != nil {
 		// Convert to 16-bit value (degrees * 65536/360)
-		heading := uint16((*a.MagneticHeading * 65536.0) / 360.0)
+		heading := uint16(int64(math.Round(*a.MagneticHeading*65536.0/360.0)) & 0xFFFF)
 		data := []byte{
 			byte(heading >> 8),
 			byte(heading),
@@ -1098,14 +1099,14 @@ func (a *AircraftDerivedData) Encode(buf *bytes.Buffer) (int, error) {
 		var data [2]byte
 		if a.IsMach {
 			// Mach number * 1000
-			mach := uint16(*a.AirspeedMach * 1000.0)
+			mach := uint16(math.Round(*a.AirspeedMach * 1000.0))
 			data[0] = byte(0x80 | (mach >> 8)) // Set high bit to indicate Mach
 			data[1] = byte(mach)
 		} else {
 			// IAS in 2^-14 NM/s
 			// Convert from knots to NM/s (1 kt = 0.00027778 NM/s)
 			// Then to 2^-14 units (1 NM/s = 2^14 units)
-			ias := uint16(*a.AirspeedMach / 0.00006103515625)
+			ias := uint16(math.Round(*a.AirspeedMach / 0.00006103515625))
 			data[0] = byte(ias >> 8)
 			data[1] = byte(ias)
 		}
@@ -1118,7 +1119,7 @@ func (a *AircraftDerivedData) Encode(buf *bytes.Buffer) (int, error) {
 
 	// FRN 5: True Airspeed
 	if a.TrueAirspeed != nil {
-		tas := uint16(*a.TrueAirspeed)
+		tas := uint16(math.Round(*a.TrueAirspeed))
 		data := []byte{
 			byte(tas >> 8),
 			byte(tas),
@@ -1133,7 +1134,7 @@ func (a *AircraftDerivedData) Encode(buf *bytes.Buffer) (int, error) {
 	// FRN 6: Selected Altitude
 	if a.SelectedAltitude != nil {
 		// Convert altitude from feet to 25ft resolution
-		alt := int16(a.SelectedAltitude.Altitude / 25.0)
+		alt := int16(math.Round(a.SelectedAltitude.Altitude / 25.0))
 
 		// First byte: source bits and 6 MSBs of altitude
 		byte1 := byte(0)
@@ -1157,7 +1158,7 @@ func (a *AircraftDerivedData) Encode(buf *bytes.Buffer) (int, error) {
 	// FRN 7: Final State Selected Altitude
 	if a.FinalStateSelectedAlt != nil {
 		// Convert altitude from feet to 25ft resolution
-		alt := int16(a.FinalStateSelectedAlt.Altitude / 25.0)
+		alt := int16(math.Round(a.FinalStateSelectedAlt.Altitude / 25.0))
 
 		// First byte: status bits and 5 MSBs of altitude
 		byte1 := byte(0)
@@ -1230,18 +1231,18 @@ func (a *AircraftDerivedData) Encode(buf *bytes.Buffer) (int, error) {
 			data[0] |= point.TCPNumber & 0x3F
 
 			// Altitude (10ft resolution)
-			altVal := int16(point.Altitude / 10.0)
+			altVal := int16(math.Round(point.Altitude / 10.0))
 			data[1] = byte(altVal >> 8)
 			data[2] = byte(altVal)
 
 			// Latitude (180/2^23 degrees resolution)
-			latVal := int32(point.Latitude * float64(1<<23) / 180.0)
+			latVal := int32(math.Round(point.Latitude * float64(1<<23) / 180.0))
 			data[3] = byte(latVal >> 16)
 			data[4] = byte(latVal >> 8)
 			data[5] = byte(latVal)
 
 			// Longitude (180/2^23 degrees resolution)
-			lonVal := int32(point.Longitude * float64(1<<23) / 180.0)
+			lonVal := int32(math.Round(point.Longitude * float64(1<<23) / 180.0))
 			data[6] = byte(lonVal >> 16)
 			data[7] = byte(lonVal >> 8)
 			data[8] = byte(lonVal)
@@ -1262,7 +1263,7 @@ func (a *AircraftDerivedData) Encode(buf *bytes.Buffer) (int, error) {
 			data[12] = byte(point.TimeOverPoint)
 
 			// TCP Turn Radius (0.01 NM resolution)
-			ttrVal := uint16(point.TCPTurnRadius / 0.01)
+			ttrVal := uint16(math.Round(point.TCPTurnRadius / 0.01))
 			data[13] = byte(ttrVal >> 8)
 			data[14] = byte(ttrVal)
 
@@ -1297,21 +1298,21 @@ func (a *AircraftDerivedData) Encode(buf *bytes.Buffer) (int, error) {
 
 		// Wind speed
 		if a.MetData.WindSpeedValid && a.MetData.WindSpeed != nil {
-			windSpeed := uint16(*a.MetData.WindSpeed)
+			windSpeed := uint16(math.Round(*a.MetData.WindSpeed))
 			data[1] = byte(windSpeed >> 8)
 			data[2] = byte(windSpeed)
 		}
 
 		// Wind direction
 		if a.MetData.WindDirectionValid && a.MetData.WindDirection != nil {
-			windDir := uint16(*a.MetData.WindDirection)
+			windDir := uint16(math.Round(*a.MetData.WindDirection))
 			data[3] = byte(windDir >> 8)
 			data[4] = byte(windDir)
 		}
 
 		// Temperature (0.25°C resolution)
 		if a.MetData.TemperatureValid && a.MetData.Temperature != nil {
-			temp := int16(*a.MetData.Temperature / 0.25)
+			temp := int16(math.Round(*a.MetData.Temperature / 0.25))
 			data[5] = byte(temp >> 8)
 			data[6] = byte(temp)
 		}

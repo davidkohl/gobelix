@@ -4,6 +4,7 @@ package v117
 import (
 	"bytes"
 	"fmt"
+	"math"
 	"strings"
 )
 
@@ -122,7 +123,7 @@ func (m *MeasuredInformation) Decode(buf *bytes.Buffer) (int, error) {
 		// Extract height (16 bits)
 		heightBits := uint16(data[0])<<8 | uint16(data[1])
 		// LSB = 25 feet
-		height := float64(heightBits) * 25.0
+		height := float64(int16(heightBits)) * 25.0 // two's complement
 		m.Measured3DHeight = &height
 	}
 
@@ -262,13 +263,13 @@ func (m *MeasuredInformation) Encode(buf *bytes.Buffer) (int, error) {
 	// Write Subfield #2: Measured Position
 	if hasPosition {
 		// Convert range to binary (1/256 NM resolution)
-		rangeBits := uint16(*m.MeasuredRange * 256.0)
+		rangeBits := uint16(min(math.Round(*m.MeasuredRange*256.0), 0xFFFF))
 		if *m.MeasuredRange >= 256.0 {
 			rangeBits = 0xFFFF // Maximum value (256 NM)
 		}
 
 		// Convert azimuth to binary (360/2^16 degrees resolution)
-		azimuthBits := uint16(*m.MeasuredAzimuth*65536.0/360.0) & 0xFFFF
+		azimuthBits := uint16(int64(math.Round(*m.MeasuredAzimuth*65536.0/360.0)) & 0xFFFF)
 
 		data := []byte{
 			byte(rangeBits >> 8),
@@ -286,7 +287,7 @@ func (m *MeasuredInformation) Encode(buf *bytes.Buffer) (int, error) {
 	// Write Subfield #3: Measured 3-D Height
 	if hasHeight {
 		// Convert height to binary (25 feet resolution)
-		heightBits := uint16(*m.Measured3DHeight / 25.0)
+		heightBits := uint16(int16(math.Round(*m.Measured3DHeight / 25.0)))
 
 		data := []byte{
 			byte(heightBits >> 8),
@@ -302,7 +303,7 @@ func (m *MeasuredInformation) Encode(buf *bytes.Buffer) (int, error) {
 	// Write Subfield #4: Last Measured Mode C code
 	if hasModeC {
 		// Convert to 1/4 FL resolution
-		modeCValue := int16(*m.LastModeC * 4.0)
+		modeCValue := int16(math.Round(*m.LastModeC * 4.0))
 
 		// Set first byte with flags and high bits
 		firstByte := byte(0)

@@ -4,6 +4,7 @@ package v117
 import (
 	"bytes"
 	"fmt"
+	"math"
 	"strings"
 )
 
@@ -793,7 +794,7 @@ func (f *FlightPlanRelatedData) Encode(buf *bytes.Buffer) (int, error) {
 	// Write Subfield #10: Current Cleared Flight Level
 	if hasCFL {
 		// Convert to binary (1/4 FL resolution)
-		flBits := uint16(*f.ClearedFlightLevel * 4)
+		flBits := uint16(int16(math.Round(*f.ClearedFlightLevel * 4)))
 		data := []byte{byte(flBits >> 8), byte(flBits)}
 		n, err := buf.Write(data)
 		if err != nil {

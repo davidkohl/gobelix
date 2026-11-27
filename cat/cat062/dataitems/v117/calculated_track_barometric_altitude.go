@@ -4,6 +4,7 @@ package v117
 import (
 	"bytes"
 	"fmt"
+	"math"
 
 	"github.com/davidkohl/gobelix/asterix"
 )
@@ -47,7 +48,7 @@ func (c *CalculatedTrackBarometricAltitude) Encode(buf *bytes.Buffer) (int, erro
 	}
 
 	// Convert to raw value (15-bit two's complement)
-	raw := int16(c.Altitude / 0.25)
+	raw := int16(math.Round(c.Altitude / 0.25))
 
 	// Mask to 15 bits and set QNH bit
 	rawUnsigned := uint16(raw) & 0x7FFF

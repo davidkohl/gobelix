@@ -4,6 +4,7 @@ package common
 import (
 	"bytes"
 	"fmt"
+	"math"
 
 	"github.com/davidkohl/gobelix/asterix"
 )
@@ -43,7 +44,7 @@ func (t *TimeOfDay) Encode(buf *bytes.Buffer) (int, error) {
 	}
 
 	// Convert seconds to 1/128 second units
-	raw := uint32(t.Time * 128.0)
+	raw := uint32(math.Round(t.Time * 128.0))
 
 	// Write 3 bytes
 	data := []byte{

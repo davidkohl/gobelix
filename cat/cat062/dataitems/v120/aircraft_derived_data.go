@@ -1034,7 +1034,7 @@ func (a *AircraftDerivedData) encodeTrajectoryIntentData(buf *bytes.Buffer) (int
 		if p.NC {
 			b0 |= 0x40
 		}
-		alt := uint16(p.Altitude / 10)
+		alt := uint16(int16(math.Round(float64(p.Altitude) / 10)))
 		data = append(data, b0, byte(alt>>8), byte(alt))
 		data = append(data, encodeLatLon24(p.Latitude)...)
 		data = append(data, encodeLatLon24(p.Longitude)...)

@@ -4,6 +4,7 @@ package v117
 import (
 	"bytes"
 	"fmt"
+	"math"
 	"strings"
 )
 
@@ -330,7 +331,7 @@ func (s *SystemTrackUpdateAges) Encode(buf *bytes.Buffer) (int, error) {
 	// FRN 1: Track age
 	if hasTrackAge {
 		// Convert to 1/4 seconds, max value is 63.75s (255 * 0.25)
-		val := uint8(min(*s.TrackAge/0.25, 255))
+		val := uint8(math.Round(min(*s.TrackAge/0.25, 255)))
 		err := buf.WriteByte(val)
 		if err != nil {
 			return bytesWritten, fmt.Errorf("writing track age: %w", err)
@@ -340,7 +341,7 @@ func (s *SystemTrackUpdateAges) Encode(buf *bytes.Buffer) (int, error) {
 
 	// FRN 2: PSR age
 	if hasPSRAge {
-		val := uint8(min(*s.PSRAge/0.25, 255))
+		val := uint8(math.Round(min(*s.PSRAge/0.25, 255)))
 		err := buf.WriteByte(val)
 		if err != nil {
 			return bytesWritten, fmt.Errorf("writing PSR age: %w", err)
@@ -350,7 +351,7 @@ func (s *SystemTrackUpdateAges) Encode(buf *bytes.Buffer) (int, error) {
 
 	// FRN 3: SSR age
 	if hasSSRAge {
-		val := uint8(min(*s.SSRAge/0.25, 255))
+		val := uint8(math.Round(min(*s.SSRAge/0.25, 255)))
 		err := buf.WriteByte(val)
 		if err != nil {
 			return bytesWritten, fmt.Errorf("writing SSR age: %w", err)
@@ -360,7 +361,7 @@ func (s *SystemTrackUpdateAges) Encode(buf *bytes.Buffer) (int, error) {
 
 	// FRN 4: Mode S age
 	if hasModeS {
-		val := uint8(min(*s.ModeS_Age/0.25, 255))
+		val := uint8(math.Round(min(*s.ModeS_Age/0.25, 255)))
 		err := buf.WriteByte(val)
 		if err != nil {
 			return bytesWritten, fmt.Errorf("writing Mode S age: %w", err)
@@ -371,7 +372,7 @@ func (s *SystemTrackUpdateAges) Encode(buf *bytes.Buffer) (int, error) {
 	// FRN 5: ADS-C age (16-bit value)
 	if hasADSC {
 		// Max value is 16383.75s (65535 * 0.25)
-		val := uint16(min(*s.ADSC_Age/0.25, 65535))
+		val := uint16(math.Round(min(*s.ADSC_Age/0.25, 65535)))
 		data := []byte{byte(val >> 8), byte(val)}
 		n, err := buf.Write(data)
 		if err != nil {
@@ -382,7 +383,7 @@ func (s *SystemTrackUpdateAges) Encode(buf *bytes.Buffer) (int, error) {
 
 	// FRN 6: ADS-B ES age
 	if hasADSB_ES {
-		val := uint8(min(*s.ADSB_ES_Age/0.25, 255))
+		val := uint8(math.Round(min(*s.ADSB_ES_Age/0.25, 255)))
 		err := buf.WriteByte(val)
 		if err != nil {
 			return bytesWritten, fmt.Errorf("writing ADS-B ES age: %w", err)
@@ -392,7 +393,7 @@ func (s *SystemTrackUpdateAges) Encode(buf *bytes.Buffer) (int, error) {
 
 	// FRN 7: ADS-B VDL age
 	if hasADSB_VDL {
-		val := uint8(min(*s.ADSB_VDL_Age/0.25, 255))
+		val := uint8(math.Round(min(*s.ADSB_VDL_Age/0.25, 255)))
 		err := buf.WriteByte(val)
 		if err != nil {
 			return bytesWritten, fmt.Errorf("writing ADS-B VDL age: %w", err)
@@ -402,7 +403,7 @@ func (s *SystemTrackUpdateAges) Encode(buf *bytes.Buffer) (int, error) {
 
 	// FRN 8: ADS-B UAT age
 	if hasADSB_UAT {
-		val := uint8(min(*s.ADSB_UAT_Age/0.25, 255))
+		val := uint8(math.Round(min(*s.ADSB_UAT_Age/0.25, 255)))
 		err := buf.WriteByte(val)
 		if err != nil {
 			return bytesWritten, fmt.Errorf("writing ADS-B UAT age: %w", err)
@@ -412,7 +413,7 @@ func (s *SystemTrackUpdateAges) Encode(buf *bytes.Buffer) (int, error) {
 
 	// FRN 9: Loop age
 	if hasLoop {
-		val := uint8(min(*s.LoopAge/0.25, 255))
+		val := uint8(math.Round(min(*s.LoopAge/0.25, 255)))
 		err := buf.WriteByte(val)
 		if err != nil {
 			return bytesWritten, fmt.Errorf("writing Loop age: %w", err)
@@ -422,7 +423,7 @@ func (s *SystemTrackUpdateAges) Encode(buf *bytes.Buffer) (int, error) {
 
 	// FRN 10: MLT age
 	if hasMLT {
-		val := uint8(min(*s.MLTAge/0.25, 255))
+		val := uint8(math.Round(min(*s.MLTAge/0.25, 255)))
 		err := buf.WriteByte(val)
 		if err != nil {
 			return bytesWritten, fmt.Errorf("writing MLT age: %w", err)

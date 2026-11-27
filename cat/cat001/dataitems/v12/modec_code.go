@@ -3,6 +3,7 @@ package v12
 import (
 	"bytes"
 	"fmt"
+	"math"
 
 	"github.com/davidkohl/gobelix/asterix"
 )
@@ -40,7 +41,7 @@ func (m *ModeCCode) Decode(buf *bytes.Buffer) (int, error) {
 
 func (m *ModeCCode) Encode(buf *bytes.Buffer) (int, error) {
 	// Convert flight level to 1/4 FL units
-	flCode := int16(m.FlightLevel * 4.0)
+	flCode := int16(math.Round(m.FlightLevel * 4.0))
 
 	// Handle negative values (14-bit two's complement)
 	uflCode := uint16(flCode) & 0x3FFF
