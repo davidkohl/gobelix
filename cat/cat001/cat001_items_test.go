@@ -406,6 +406,113 @@ func TestCat001RFSField(t *testing.T) {
 	}
 }
 
+// Known-byte RFS records built by hand from the ed 1.4 layout (§5.3.1,
+// §5.4.1, §6), with every decoded value written out, so the check does not
+// rest on the standard-form decode of the same implementation.
+func TestCat001RFSKnownBytes(t *testing.T) {
+	for name, tc := range map[string]struct {
+		rec      []byte
+		want     map[string]asterix.DataItem
+		standard []byte
+	}{
+		"plot": {
+			rec: []byte{
+				0xC1, 0x01, 0x02, // FSPEC: FRN 1 (010), 2 (020), 21 (RS)
+				0x32, 0x02, // I001/010 SAC 0x32, SIC 0x02
+				0x20,       // I001/020 TYP 0 plot, SSR/PSR 10 (SSR)
+				0x03,       // RFS N = 3
+				0x09, 0xF0, //                   FRN 9 I001/120: -16 x 14.0625 kt
+				0x04, 0x8F, 0xC0, //             FRN 4 I001/070: V, code 7700 octal
+				0x03, 0x19, 0x40, 0x40, 0x00, // FRN 3 I001/040: 6464/128 NM, 0x4000 x 360/2^16 deg
+			},
+			want: map[string]asterix.DataItem{
+				"I001/010": &common.DataSourceIdentifier{SAC: 0x32, SIC: 0x02},
+				"I001/020": &v12.TargetReportDescriptor{TYP: v12.TYPPlot, SSR: true},
+				"I001/120": &v12.MeasuredRadialDopplerSpeed{DopplerSpeedKt: -225},
+				"I001/070": &v12.Mode3ACode{V: true, Mode: 0o7700},
+				"I001/040": &v12.PositionPolar{RHO: 50.5, THETA: 90},
+			},
+			// FSPEC FRN 1, 2, 3, 4 | 9; items in FRN order.
+			standard: []byte{0xF1, 0x40, 0x32, 0x02, 0x20, 0x19, 0x40, 0x40, 0x00, 0x8F, 0xC0, 0xF0},
+		},
+		"track": {
+			rec: []byte{
+				0xC1, 0x01, 0x02, // FSPEC: FRN 1 (010), 2 (020), 21 (RS)
+				0x32, 0x02, // I001/010
+				0xB0,                         // I001/020 TYP 1 track, SSR/PSR 11
+				0x02,                         // RFS N = 2
+				0x04, 0x19, 0x40, 0x40, 0x00, // FRN 4 (track) I001/040: 50.5 NM, 90 deg
+				0x03, 0x12, 0x34, //             FRN 3 (track) I001/161: track number 0x1234
+			},
+			want: map[string]asterix.DataItem{
+				"I001/010": &common.DataSourceIdentifier{SAC: 0x32, SIC: 0x02},
+				"I001/020": &v12.TargetReportDescriptor{TYP: v12.TYPTrack, SSR: true, PSR: true},
+				"I001/040": &v12.PositionPolar{RHO: 50.5, THETA: 90},
+				"I001/161": &v12.TrackPlotNumber{Number: 0x1234},
+			},
+			// FSPEC track FRN 1-4; items in FRN order.
+			standard: []byte{0xF0, 0x32, 0x02, 0xB0, 0x12, 0x34, 0x19, 0x40, 0x40, 0x00},
+		},
+	} {
+		db := decodeCat001(t, block(1, tc.rec))
+		if got := db.Records()[0].Items(); !reflect.DeepEqual(got, tc.want) {
+			t.Errorf("%s: items\n got %+v\nwant %+v", name, got, tc.want)
+		}
+		out, err := db.Encode()
+		if err != nil {
+			t.Fatalf("%s: encode: %v", name, err)
+		}
+		if want := block(1, tc.standard); !bytes.Equal(out, want) {
+			t.Errorf("%s: re-encode\n got % X\nwant % X", name, out, want)
+		}
+	}
+}
+
+// The SP field must not be sent inside the RFS field (ed 1.4 §5.3.2.16
+// note 4, §5.4.2.20 note 3), and with the selecting UAP12 neither may
+// I001/020: its TYP selects the layout and is read at FRN 2 (§5.3.2.2).
+func TestCat001RFSRefusesSPAndI001020(t *testing.T) {
+	sel, _ := uap.NewUAP12()
+	plot, _ := uap.NewUAP12Plot()
+	track, _ := uap.NewUAP12Track()
+	for name, tc := range map[string]struct {
+		u   asterix.UAP
+		rec []byte
+	}{
+		// FRN 1, 2, 21 | 010 | 020 | RFS N=1: FRN 20, SP LEN 2, 0xAA
+		"plot SP in RFS":         {sel, []byte{0xC1, 0x01, 0x02, 0x32, 0x02, 0x20, 0x01, 0x14, 0x02, 0xAA}},
+		"track SP in RFS":        {sel, []byte{0xC1, 0x01, 0x02, 0x32, 0x02, 0x80, 0x01, 0x14, 0x02, 0xAA}},
+		"forced plot SP in RFS":  {plot, []byte{0xC1, 0x01, 0x02, 0x32, 0x02, 0x20, 0x01, 0x14, 0x02, 0xAA}},
+		"forced track SP in RFS": {track, []byte{0xC1, 0x01, 0x02, 0x32, 0x02, 0x80, 0x01, 0x14, 0x02, 0xAA}},
+		// FRN 1, 21 | 010 | RFS N=1: FRN 2, I001/020 plot (SSR)
+		"020 plot in RFS": {sel, []byte{0x81, 0x01, 0x02, 0x32, 0x02, 0x01, 0x02, 0x20}},
+		// FRN 1, 21 | 010 | RFS N=2: FRN 2, I001/020 track; FRN 7, I001/070
+		// (FRN 7 is I001/141, also two octets, under the plot layout, so
+		// without the check this decoded silently as a plot).
+		"020 track in RFS": {sel, []byte{0x81, 0x01, 0x02, 0x32, 0x02, 0x02, 0x02, 0x80, 0x07, 0x0F, 0xFF}},
+	} {
+		_, err := asterix.NewDecoder(asterix.WithPreloadedUAPs(tc.u)).Decode(block(1, tc.rec))
+		if !errors.Is(err, asterix.ErrInvalidFSPEC) {
+			t.Errorf("%s: err = %v, want ErrInvalidFSPEC", name, err)
+		}
+	}
+
+	// A forced layout does not select by TYP, so I001/020 may be in RFS.
+	db, err := asterix.NewDecoder(asterix.WithPreloadedUAPs(track)).Decode(
+		block(1, []byte{0x81, 0x01, 0x02, 0x32, 0x02, 0x02, 0x02, 0x80, 0x03, 0x12, 0x34}))
+	if err != nil {
+		t.Fatalf("forced track, I001/020 in RFS: %v", err)
+	}
+	if it, ok := db.Records()[0].GetDataItem("I001/161"); !ok || it.(*v12.TrackPlotNumber).Number != 0x1234 {
+		t.Errorf("forced track: I001/161 = %+v", it)
+	}
+	// SP at its FSPEC position still decodes: FRN 1, 2, 20 | 010 | 020 | SP.
+	if _, err := asterix.NewDecoder(asterix.WithPreloadedUAPs(sel)).Decode(
+		block(1, []byte{0xC1, 0x01, 0x04, 0x32, 0x02, 0x20, 0x02, 0xAA})); err != nil {
+		t.Errorf("SP at FRN 20: %v", err)
+	}
+}
+
 // Spare FSPEC bits (plot FRN 16-19, ed 1.4 §5.3.2.16 note 1) and FRNs
 // beyond the track UAP (above 22, §5.4.1.2) are decode errors, not a
 // silent skip that would shift the following items.

@@ -35,6 +35,15 @@ func NewUAP12() (*UAP12, error) {
 	if err != nil {
 		return nil, err
 	}
+	// SelectDecodeUAP reads TYP from I001/020 at its FSPEC position (FRN 2).
+	// Sent inside the RFS field, I001/020 would come too late to select the
+	// layout, so these selector-owned instances refuse it there (as well as
+	// SP, FRN 20). I001/020 is compulsory (ed 1.4 §5.3.2.2, §5.4.2.2).
+	for _, b := range []*asterix.BaseUAP{plotUAP.BaseUAP, trackUAP.BaseUAP} {
+		if err := b.EnableRFS(21, 20, 2); err != nil {
+			return nil, err
+		}
+	}
 	return &UAP12{BaseUAP: plotUAP.BaseUAP, plot: plotUAP, track: trackUAP}, nil
 }
 
@@ -52,6 +61,7 @@ func (u *UAP12) SelectDecodeUAP(data []byte) (asterix.UAP, error) {
 	off++ // last FSPEC octet
 	if data[0]&0x40 == 0 {
 		// No I001/020: compulsory per spec; fall back to the plot layout.
+		// An I001/020 in the RFS field is refused there (see NewUAP12).
 		return u.plot, nil
 	}
 	if data[0]&0x80 != 0 {
