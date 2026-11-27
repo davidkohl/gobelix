@@ -1,96 +1,64 @@
-// dataitems/cat062/reserved_expansion.go
+// cat062/dataitems/v117/reserved_expansion.go
 package v117
 
 import (
 	"bytes"
 	"fmt"
+
+	"github.com/davidkohl/gobelix/asterix"
 )
 
-// ReservedExpansion implements RE (Reserved Expansion Field) for Cat062 (FRN 34)
-// Reserved for future expansion of the data format
+// ReservedExpansion implements "RE062", the reserved expansion field. Data holds the
+// whole explicit item: the LEN octet, which counts itself, and the LEN-1
+// octets that follow it.
 type ReservedExpansion struct {
 	Data []byte
 }
 
-func (r *ReservedExpansion) Decode(buf *bytes.Buffer) (int, error) {
-	bytesRead := 0
-	r.Data = nil
-
-	// First byte is length indicator
-	if buf.Len() < 1 {
-		return 0, fmt.Errorf("buffer too short for reserved expansion length")
-	}
-
-	lenByte, err := buf.ReadByte()
+// Decode reads LEN and the LEN-1 octets after it.
+func (s *ReservedExpansion) Decode(buf *bytes.Buffer) (int, error) {
+	l, err := buf.ReadByte()
 	if err != nil {
-		return 0, fmt.Errorf("reading reserved expansion length: %w", err)
+		return 0, fmt.Errorf("%w: reading reserved expansion length", asterix.ErrBufferTooShort)
 	}
-	bytesRead++
-	r.Data = append(r.Data, lenByte)
-
-	// Length is in octets
-	length := int(lenByte)
-
-	// Validate length to prevent potential buffer overruns
-	if length > buf.Len() {
-		return bytesRead, fmt.Errorf("buffer too short for reserved expansion data: need %d bytes, have %d",
-			length, buf.Len())
+	if l == 0 {
+		return 1, fmt.Errorf("%w: reserved expansion LEN is 0 (it counts itself)", asterix.ErrInvalidLength)
 	}
-
-	// Only read what's available
-	if length > 0 {
-		data := make([]byte, length)
-		n, err := buf.Read(data)
-		if err != nil {
-			return bytesRead + n, fmt.Errorf("reading reserved expansion data: %w", err)
-		}
-
-		if n != length {
-			return bytesRead + n, fmt.Errorf("partial data for reserved expansion: expected %d bytes, got %d",
-				length, n)
-		}
-
-		bytesRead += n
-		r.Data = append(r.Data, data...)
+	if buf.Len() < int(l)-1 {
+		return 1, fmt.Errorf("%w: reserved expansion LEN %d needs %d octets, have %d", asterix.ErrBufferTooShort, l, int(l)-1, buf.Len())
 	}
-
-	return bytesRead, nil
+	s.Data = make([]byte, l)
+	s.Data[0] = l
+	copy(s.Data[1:], buf.Next(int(l)-1))
+	return int(l), nil
 }
 
-func (r *ReservedExpansion) Encode(buf *bytes.Buffer) (int, error) {
-	if len(r.Data) == 0 {
-		// If no data, encode a minimal valid value (zero length)
-		return buf.Write([]byte{0})
+// Encode writes Data. An empty Data encodes as LEN = 1.
+func (s *ReservedExpansion) Encode(buf *bytes.Buffer) (int, error) {
+	if err := s.Validate(); err != nil {
+		return 0, err
 	}
-
-	return buf.Write(r.Data)
+	if len(s.Data) == 0 {
+		return buf.Write([]byte{1})
+	}
+	return buf.Write(s.Data)
 }
 
-func (r *ReservedExpansion) String() string {
-	if len(r.Data) <= 1 {
+// String returns a string representation.
+func (s *ReservedExpansion) String() string {
+	if len(s.Data) <= 1 {
 		return "ReservedExpansion[empty]"
 	}
-
-	// Data starts after the length indicator
-	length := int(r.Data[0])
-	if len(r.Data) != length+1 {
-		return fmt.Sprintf("ReservedExpansion[malformed: declared %d, actual %d]", length, len(r.Data)-1)
-	}
-
-	return fmt.Sprintf("ReservedExpansion[%d bytes]", length)
+	return fmt.Sprintf("ReservedExpansion[%d bytes]", len(s.Data)-1)
 }
 
-func (r *ReservedExpansion) Validate() error {
-	// Basic validation
-	if len(r.Data) == 0 {
-		return nil // Empty is valid, will be encoded as {0}
+// Validate checks that Data starts with a LEN octet equal to its length.
+func (s *ReservedExpansion) Validate() error {
+	if len(s.Data) > 255 {
+		return fmt.Errorf("%w: reserved expansion longer than 255 octets", asterix.ErrInvalidLength)
 	}
-
-	// Check if length byte matches actual data
-	lengthByte := r.Data[0]
-	if int(lengthByte) != len(r.Data)-1 {
-		return fmt.Errorf("inconsistent length: declared %d, actual %d", lengthByte, len(r.Data)-1)
+	if len(s.Data) > 0 && int(s.Data[0]) != len(s.Data) {
+		return fmt.Errorf("%w: reserved expansion LEN %d does not match %d octets", asterix.ErrInvalidLength, s.Data[0], len(s.Data))
 	}
-
 	return nil
 }

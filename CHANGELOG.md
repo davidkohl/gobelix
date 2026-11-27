@@ -135,8 +135,21 @@ that old code fails to compile instead of reading other values.
   refused).
 - I034/041 returns an error on a short buffer instead of `0, nil`.
 
-### CAT048, CAT021, CAT062
+### CAT062 (ed 1.17, 1.20)
+
+- SP062 (1.20) and RE062 (1.17, 1.20): LEN counts itself (ASTERIX Part 1
+  §4.3.5). The decoders read LEN octets after the length octet, one too
+  many, so the next item or record was misaligned. LEN = 0 and a LEN
+  beyond the data are decode errors; an empty `Data` encodes as LEN = 1
+  (it was LEN = 0); `Validate` and `Encode` refuse a `Data` whose first
+  octet is not its length. `Data` holds the LEN octet, as before. SP062
+  of 1.17 already counted LEN correctly; its `Data` holds only the
+  payload.
+- A set FSPEC bit for a spare FRN (for example FRN 2) or an FRN beyond the
+  UAP is a decode error (FSPEC check above).
+
+### CAT048, CAT021
 
 - Decoded values are unchanged. The only new behaviour is the FSPEC check
-  above: a record that sets a spare FSPEC bit (for example CAT062 FRN 2)
-  or an FRN beyond the UAP is now a decode error.
+  above: a record that sets a spare FSPEC bit or an FRN beyond the UAP is
+  now a decode error.
