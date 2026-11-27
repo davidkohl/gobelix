@@ -3,6 +3,8 @@ package v10
 import (
 	"bytes"
 	"fmt"
+
+	"github.com/davidkohl/gobelix/asterix"
 )
 
 // StationProcessingMode represents I002/060 - Station Processing Mode (CAT002 ed 1.2 §5.2.7).
@@ -11,6 +13,8 @@ import (
 type StationProcessingMode struct {
 	// Mode is the first part's indicator bits. Kept for compatibility; it
 	// equals Parts[0] after Decode. Encode uses it only when Parts is empty.
+	// When both are set (Mode non-zero and Parts non-empty) they must agree,
+	// Mode == Parts[0], or Validate and Encode return an error.
 	Mode uint8
 	// Parts holds the 7-bit indicators of every part in order.
 	Parts []uint8
@@ -40,6 +44,10 @@ func (s *StationProcessingMode) Encode(buf *bytes.Buffer) (int, error) {
 func (s *StationProcessingMode) Validate() error {
 	if err := check7Bit([]uint8{s.Mode}, "station processing mode"); err != nil {
 		return err
+	}
+	if len(s.Parts) > 0 && s.Mode != 0 && s.Mode != s.Parts[0] {
+		return fmt.Errorf("%w: station processing mode: Mode %#x disagrees with Parts[0] %#x",
+			asterix.ErrInvalidMessage, s.Mode, s.Parts[0])
 	}
 	return check7Bit(s.Parts, "station processing mode")
 }

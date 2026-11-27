@@ -94,6 +94,13 @@ func TestCat023ItemsKnownBytes(t *testing.T) {
 	})
 }
 
+// I023/120 needs at least one counter block (ed 1.3 §5.2.8).
+func TestCat023ServiceStatisticsREPZeroFails(t *testing.T) {
+	if _, err := new(v13.ServiceStatistics).Decode(bytes.NewBuffer([]byte{0x00})); err == nil {
+		t.Error("I023/120 REP 0 decoded")
+	}
+}
+
 func TestCat023ServiceStatisticsLegacyEncode(t *testing.T) {
 	// Callers that fill only TYPE/REF/CV get one block per counter.
 	s := &v13.ServiceStatistics{TYPE: &v13.TYPEValue{TYPE: 3}, REF: &v13.REFValue{REF: true},
@@ -111,6 +118,15 @@ func TestCat023ItemValidation(t *testing.T) {
 	for name, item := range map[string]asterix.DataItem{
 		"110 STAT 8":      &v13.ServiceStatus{STAT: &v13.STATValue{STAT: 8}},
 		"120 256 entries": &v13.ServiceStatistics{Entries: make([]v13.ServiceStatisticsEntry, 256)},
+		"120 no counters": &v13.ServiceStatistics{},
+		"120 TYPE disagrees": &v13.ServiceStatistics{Entries: []v13.ServiceStatisticsEntry{{Type: 3}},
+			TYPE: &v13.TYPEValue{TYPE: 4}},
+		"120 REF disagrees": &v13.ServiceStatistics{Entries: []v13.ServiceStatisticsEntry{{Ref: true}},
+			REF: &v13.REFValue{REF: false}},
+		"120 CV count disagrees": &v13.ServiceStatistics{Entries: []v13.ServiceStatisticsEntry{{Counter: 1}},
+			CV: []v13.CounterValue{{Counter: 1}, {Counter: 2}}},
+		"120 CV value disagrees": &v13.ServiceStatistics{Entries: []v13.ServiceStatisticsEntry{{Counter: 1}},
+			CV: []v13.CounterValue{{Counter: 2}}},
 		"RE LEN mismatch": &v13.ReservedExpansion{Data: []byte{0x03, 0x00}},
 		"SP LEN mismatch": &v13.SpecialPurpose{Data: []byte{0x01, 0x00}},
 	} {

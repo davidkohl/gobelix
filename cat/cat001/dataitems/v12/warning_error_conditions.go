@@ -12,7 +12,9 @@ import (
 // value in bits 8-2 and FX in bit 1.
 type WarningErrorConditions struct {
 	// W is the first W/E value. Kept for compatibility; it equals Values[0]
-	// after Decode. Encode uses it only when Values is empty.
+	// after Decode. Encode uses it only when Values is empty. When both are
+	// set (W non-zero and Values non-empty) they must agree, W == Values[0],
+	// or Validate and Encode return an error.
 	W uint8
 	// Values holds every W/E value in transmission order.
 	Values []uint8
@@ -58,6 +60,9 @@ func (w *WarningErrorConditions) Validate() error {
 		if v > 127 {
 			return fmt.Errorf("%w: W/E value %d is 7 bits, got %d", asterix.ErrInvalidMessage, i, v)
 		}
+	}
+	if len(w.Values) > 0 && w.W != 0 && w.W != w.Values[0] {
+		return fmt.Errorf("%w: I001/030 W %d disagrees with Values[0] %d", asterix.ErrInvalidMessage, w.W, w.Values[0])
 	}
 	return nil
 }

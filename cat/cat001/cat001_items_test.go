@@ -3,6 +3,7 @@ package cat001_test
 import (
 	"bytes"
 	"errors"
+	"math"
 	"math/bits"
 	"reflect"
 	"strings"
@@ -97,10 +98,10 @@ func TestCat001ItemsKnownBytes(t *testing.T) {
 			&v12.ModeCCodeConfidence{GrayCode: 0x010},
 			func() asterix.DataItem { return &v12.ModeCCodeConfidence{} }},
 		{"I001/120 -1 LSB", []byte{0xFF},
-			&v12.MeasuredRadialDopplerSpeed{DopplerSpeed: -14.0625},
+			&v12.MeasuredRadialDopplerSpeed{DopplerSpeedKt: -14.0625},
 			func() asterix.DataItem { return &v12.MeasuredRadialDopplerSpeed{} }},
 		{"I001/130 two indicators", []byte{0x05, 0x06},
-			&v12.RadarPlotCharacteristics{SRL: 2, SRR: 3, Indicators: []uint8{2, 3}},
+			&v12.RadarPlotCharacteristics{Indicators: []uint8{2, 3}},
 			func() asterix.DataItem { return &v12.RadarPlotCharacteristics{} }},
 		{"I001/131", []byte{0xF6},
 			&v12.ReceivedPower{Power: -10},
@@ -130,14 +131,10 @@ func TestCat001ItemsKnownBytes(t *testing.T) {
 }
 
 func TestCat001TargetReportDescriptorLegacyFieldsEncode(t *testing.T) {
-	// Callers that only set W / the SRL..APD view keep working.
+	// Callers that only set W keep working.
 	var buf bytes.Buffer
 	if _, err := (&v12.WarningErrorConditions{W: 5}).Encode(&buf); err != nil || !bytes.Equal(buf.Bytes(), []byte{0x0A}) {
 		t.Fatalf("W-only encode: % X, %v", buf.Bytes(), err)
-	}
-	buf.Reset()
-	if _, err := (&v12.RadarPlotCharacteristics{SRL: 2, SAM: -1}).Encode(&buf); err != nil || !bytes.Equal(buf.Bytes(), []byte{0x05, 0x01, 0xFE}) {
-		t.Fatalf("legacy I001/130 encode: % X, %v", buf.Bytes(), err)
 	}
 }
 
@@ -189,7 +186,9 @@ func TestCat001ItemValidation(t *testing.T) {
 		"DS1DS2 4":      &v12.TargetReportDescriptor{DS1DS2: 4},
 		"W/E 128":       &v12.WarningErrorConditions{Values: []uint8{128}},
 		"Mode-2 13 bit": &v12.Mode2Code{Code: 0x1000},
-		"Doppler range": &v12.MeasuredRadialDopplerSpeed{DopplerSpeed: 2000},
+		"Doppler range": &v12.MeasuredRadialDopplerSpeed{DopplerSpeedKt: 2000},
+		"Doppler NaN":   &v12.MeasuredRadialDopplerSpeed{DopplerSpeedKt: math.NaN()},
+		"Doppler -Inf":  &v12.MeasuredRadialDopplerSpeed{DopplerSpeedKt: math.Inf(-1)},
 		"Gray 13 bit":   &v12.ModeCCodeConfidence{GrayCode: 0x1000},
 		"SP too long":   &common.ExplicitField{Payload: make([]byte, 255)},
 	} {
@@ -448,5 +447,64 @@ func TestCat001TrackRecordFSPECBeforeEncode(t *testing.T) {
 	}
 	if est := rec.EstimateSize(); est < buf.Len() {
 		t.Errorf("EstimateSize %d < encoded %d", est, buf.Len())
+	}
+}
+
+// Gillham anchors worked out by hand, independent of GillhamToAltitude:
+// altitude = 500*N500 + 100*N100 - 1300 ft, N500 as reflected binary Gray
+// over D2 D4 A1 A2 A4 B1 B2 B4, N100 = 1..5 as C1C2C4 = 001 011 010 110 100,
+// taken in reverse when N500 is odd. Bit order of I001/100 bits 28-17:
+// C1 A1 C2 A2 C4 A4 B1 D1 B2 D2 B4 D4.
+func TestCat001GillhamAnchors(t *testing.T) {
+	for _, a := range []struct {
+		ft   int
+		code uint16 // pulses
+	}{
+		{-1200, 0x080},  // C4
+		{-1000, 0x200},  // C2
+		{0, 0x20A},      // C2 B2 B4
+		{100, 0xA0A},    // C1 C2 B2 B4
+		{500, 0x208},    // C2 B2
+		{1000, 0x228},   // C2 B1 B2
+		{10000, 0x362},  // C2 A2 A4 B1 B4
+		{35000, 0x661},  // A1 C2 A4 B1 D4
+		{126700, 0x084}, // C4 D2
+	} {
+		if alt, ok := v12.GillhamToAltitude(a.code); !ok || alt != a.ft {
+			t.Errorf("GillhamToAltitude(%#03x) = %d, %v; want %d", a.code, alt, ok, a.ft)
+		}
+		if code, ok := v12.AltitudeToGillham(a.ft); !ok || code != a.code {
+			t.Errorf("AltitudeToGillham(%d) = %#03x, %v; want %#03x", a.ft, code, ok, a.code)
+		}
+	}
+	// I001/100 on the wire: 0 ft, V/G clear, no quality bits.
+	m := &v12.ModeCCodeConfidence{}
+	if _, err := m.Decode(bytes.NewBuffer([]byte{0x02, 0x0A, 0x00, 0x00})); err != nil || !m.AltitudeValid || m.FlightLevel != 0 {
+		t.Errorf("I001/100 02 0A 00 00: %+v, %v; want FL 0", m, err)
+	}
+}
+
+// Legacy and new views of one item must agree when both are set.
+func TestCat001LegacyAndNewFieldsMustAgree(t *testing.T) {
+	for name, it := range map[string]asterix.DataItem{
+		"030 W vs Values":       &v12.WarningErrorConditions{W: 3, Values: []uint8{4}},
+		"100 Gray vs FL":        &v12.ModeCCodeConfidence{GrayCode: 0x20A, FlightLevel: 10, AltitudeValid: true},
+		"100 invalid Gray + FL": &v12.ModeCCodeConfidence{GrayCode: 0x010, AltitudeValid: true},
+		"130 empty":             &v12.RadarPlotCharacteristics{},
+	} {
+		if _, err := it.Encode(new(bytes.Buffer)); err == nil {
+			t.Errorf("%s: encoded", name)
+		}
+	}
+	for name, it := range map[string]asterix.DataItem{
+		"030 W == Values[0]": &v12.WarningErrorConditions{W: 4, Values: []uint8{4, 5}},
+		"030 Values only":    &v12.WarningErrorConditions{Values: []uint8{4}},
+		"100 Gray == FL":     &v12.ModeCCodeConfidence{GrayCode: 0x228, FlightLevel: 10, AltitudeValid: true},
+		"100 Gray only":      &v12.ModeCCodeConfidence{GrayCode: 0x228},
+		"100 FL only":        &v12.ModeCCodeConfidence{FlightLevel: 10},
+	} {
+		if _, err := it.Encode(new(bytes.Buffer)); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
 	}
 }

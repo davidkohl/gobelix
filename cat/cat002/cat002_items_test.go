@@ -220,3 +220,28 @@ func TestCat002RFSFieldAndSpareBit(t *testing.T) {
 		t.Errorf("spare FRN 12: err = %v, want ErrInvalidFSPEC", err)
 	}
 }
+
+// Legacy and new views of one item must agree when both are set; I002/070
+// needs at least one counter (ed 1.2 §5.2.8).
+func TestCat002LegacyAndNewFieldsMustAgreeAndREP(t *testing.T) {
+	for name, it := range map[string]asterix.DataItem{
+		"050 Status vs Parts": &v10.StationConfigurationStatus{Status: 1, Parts: []uint8{2}},
+		"060 Mode vs Parts":   &v10.StationProcessingMode{Mode: 1, Parts: []uint8{2, 3}},
+		"070 no counters":     &v10.PlotCountValues{},
+	} {
+		if _, err := it.Encode(new(bytes.Buffer)); err == nil {
+			t.Errorf("%s: encoded", name)
+		}
+	}
+	for name, it := range map[string]asterix.DataItem{
+		"050 agree":      &v10.StationConfigurationStatus{Status: 2, Parts: []uint8{2, 1}},
+		"060 Parts only": &v10.StationProcessingMode{Parts: []uint8{2}},
+	} {
+		if _, err := it.Encode(new(bytes.Buffer)); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	if _, err := new(v10.PlotCountValues).Decode(bytes.NewBuffer([]byte{0x00})); err == nil {
+		t.Error("I002/070 REP 0 decoded")
+	}
+}

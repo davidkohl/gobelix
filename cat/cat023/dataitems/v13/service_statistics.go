@@ -20,7 +20,9 @@ type ServiceStatistics struct {
 	// Deprecated: TYPE, REF and CV are the pre-ed-1.3-layout view kept for
 	// compatibility. After Decode, TYPE and REF are those of the first entry
 	// and CV holds every counter. Encode uses them only when Entries is
-	// empty: one block per CV, each with TYPE and REF.
+	// empty: one block per CV, each with TYPE and REF. When both views are
+	// set they must agree (TYPE and REF those of Entries[0], CV one counter
+	// per entry), or Validate and Encode return an error.
 	TYPE *TYPEValue
 	REF  *REFValue
 	CV   []CounterValue
@@ -65,6 +67,10 @@ func (s *ServiceStatistics) Decode(buf *bytes.Buffer) (int, error) {
 		return 0, fmt.Errorf("%w: reading I023/120 REP", asterix.ErrBufferTooShort)
 	}
 	n := 1
+	if rep == 0 {
+		// "followed by at least one block of 6 octets" (ed 1.3 §5.2.8)
+		return n, fmt.Errorf("%w: I023/120 REP is 0, at least one counter is required", asterix.ErrInvalidMessage)
+	}
 	if buf.Len() < int(rep)*6 {
 		return n, fmt.Errorf("%w: I023/120 REP %d needs %d octets, have %d", asterix.ErrBufferTooShort, rep, int(rep)*6, buf.Len())
 	}
@@ -131,10 +137,40 @@ func (s *ServiceStatistics) Encode(buf *bytes.Buffer) (int, error) {
 
 // Validate validates the Service Statistics
 func (s *ServiceStatistics) Validate() error {
-	if len(s.entries()) > 255 {
-		return fmt.Errorf("%w: I023/120 holds at most 255 counters, got %d", asterix.ErrInvalidMessage, len(s.entries()))
+	n := len(s.entries())
+	if n == 0 {
+		return fmt.Errorf("%w: I023/120 needs at least one counter (ed 1.3 §5.2.8)", asterix.ErrInvalidMessage)
+	}
+	if n > 255 {
+		return fmt.Errorf("%w: I023/120 holds at most 255 counters, got %d", asterix.ErrInvalidMessage, n)
+	}
+	if len(s.Entries) > 0 && !s.legacyAgrees() {
+		return fmt.Errorf("%w: I023/120 deprecated TYPE/REF/CV disagree with Entries", asterix.ErrInvalidMessage)
 	}
 	return nil
+}
+
+// legacyAgrees reports whether the deprecated view, where set, matches
+// Entries as Decode would fill it.
+func (s *ServiceStatistics) legacyAgrees() bool {
+	if s.TYPE != nil && s.TYPE.TYPE != s.Entries[0].Type {
+		return false
+	}
+	if s.REF != nil && s.REF.REF != s.Entries[0].Ref {
+		return false
+	}
+	if len(s.CV) == 0 {
+		return true
+	}
+	if len(s.CV) != len(s.Entries) {
+		return false
+	}
+	for i, cv := range s.CV {
+		if cv.Counter != s.Entries[i].Counter {
+			return false
+		}
+	}
+	return true
 }
 
 // String returns a string representation

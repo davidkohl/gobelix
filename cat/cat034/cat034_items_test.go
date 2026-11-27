@@ -2,6 +2,7 @@ package cat034_test
 
 import (
 	"bytes"
+	"math"
 	"reflect"
 	"testing"
 
@@ -91,7 +92,7 @@ func TestCat034ItemsKnownBytes(t *testing.T) {
 		{"I034/110", []byte{0x02}, &v129.DataFilter{TYP: 2},
 			func() asterix.DataItem { return &v129.DataFilter{} }},
 		{"I034/120", []byte{0xFF, 0x9C, 0x20, 0x00, 0x00, 0xE0, 0x00, 0x00},
-			&v129.DataSourcePosition{Height: -100, Latitude: 45, Longitude: -45},
+			&v129.DataSourcePosition{HeightM: -100, Latitude: 45, Longitude: -45},
 			func() asterix.DataItem { return v129.NewDataSourcePosition() }},
 		{"RE empty", []byte{0x01}, &common.ExplicitField{Payload: []byte{}},
 			func() asterix.DataItem { return &common.ExplicitField{} }},
@@ -159,12 +160,20 @@ func TestCat034CompoundRejectsUndefinedSubfields(t *testing.T) {
 
 func TestCat034ItemValidation(t *testing.T) {
 	for name, item := range map[string]asterix.DataItem{
-		"000 type 8":    &v129.MessageType{MessageType: 8},
-		"041 too long":  &v129.AntennaRotationPeriod{Period: 512},
-		"090 range":     &v129.CollimationError{RangeError: 1},
-		"100 rho 256":   &v129.GenericPolarWindow{RhoEnd: 256},
-		"120 height":    &v129.DataSourcePosition{Height: 40000},
-		"120 longitude": &v129.DataSourcePosition{Longitude: 180},
+		"000 type 8":         &v129.MessageType{MessageType: 8},
+		"041 too long":       &v129.AntennaRotationPeriod{Period: 512},
+		"090 range":          &v129.CollimationError{RangeError: 1},
+		"100 rho 256":        &v129.GenericPolarWindow{RhoEnd: 256},
+		"120 height":         &v129.DataSourcePosition{HeightM: 40000},
+		"120 longitude":      &v129.DataSourcePosition{Longitude: 180},
+		"120 NaN height":     &v129.DataSourcePosition{HeightM: math.NaN()},
+		"120 +Inf height":    &v129.DataSourcePosition{HeightM: math.Inf(1)},
+		"120 NaN latitude":   &v129.DataSourcePosition{Latitude: math.NaN()},
+		"120 NaN longitude":  &v129.DataSourcePosition{Longitude: math.NaN()},
+		"120 -Inf longitude": &v129.DataSourcePosition{Longitude: math.Inf(-1)},
+		"041 NaN":            &v129.AntennaRotationPeriod{Period: math.NaN()},
+		"090 NaN":            &v129.CollimationError{AzimuthError: math.NaN()},
+		"100 +Inf":           &v129.GenericPolarWindow{ThetaEnd: math.Inf(1)},
 	} {
 		if _, err := item.Encode(new(bytes.Buffer)); err == nil {
 			t.Errorf("%s: encode accepted an invalid value", name)
@@ -229,7 +238,7 @@ func TestCat034RecordsWithAllItems(t *testing.T) {
 			t.Errorf("north marker: %s missing", id)
 		}
 	}
-	if it, _ := nm.GetDataItem("I034/120"); !reflect.DeepEqual(it, &v129.DataSourcePosition{Height: -100, Latitude: 45, Longitude: -45}) {
+	if it, _ := nm.GetDataItem("I034/120"); !reflect.DeepEqual(it, &v129.DataSourcePosition{HeightM: -100, Latitude: 45, Longitude: -45}) {
 		t.Errorf("I034/120 = %+v", it)
 	}
 	gf := recs[1]

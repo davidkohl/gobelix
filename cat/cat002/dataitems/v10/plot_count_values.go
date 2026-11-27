@@ -29,6 +29,10 @@ func (p *PlotCountValues) Decode(buf *bytes.Buffer) (int, error) {
 		return bytesRead, fmt.Errorf("%w: reading plot count REP", asterix.ErrBufferTooShort)
 	}
 	bytesRead++
+	if rep == 0 {
+		// "followed by at least one plot counter" (ed 1.2 §5.2.8)
+		return bytesRead, fmt.Errorf("%w: I002/070 REP is 0, at least one counter is required", asterix.ErrInvalidMessage)
+	}
 
 	// Initialize values slice
 	p.Values = make([]PlotCountValue, rep)
@@ -90,6 +94,9 @@ func (p *PlotCountValues) Encode(buf *bytes.Buffer) (int, error) {
 }
 
 func (p *PlotCountValues) Validate() error {
+	if len(p.Values) == 0 {
+		return fmt.Errorf("%w: I002/070 needs at least one plot counter (ed 1.2 §5.2.8)", asterix.ErrInvalidMessage)
+	}
 	if len(p.Values) > 255 {
 		return fmt.Errorf("%w: too many plot count values: %d", asterix.ErrInvalidMessage, len(p.Values))
 	}

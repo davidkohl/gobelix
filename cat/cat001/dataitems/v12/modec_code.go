@@ -9,8 +9,8 @@ import (
 
 // ModeCCode represents I001/090 - Mode-C Code in Binary Representation
 type ModeCCode struct {
-	V       bool    // Validated
-	G       bool    // Garbled
+	V           bool    // Validated
+	G           bool    // Garbled
 	FlightLevel float64 // Flight level in 1/4 FL (LSB = 1/4 FL)
 }
 

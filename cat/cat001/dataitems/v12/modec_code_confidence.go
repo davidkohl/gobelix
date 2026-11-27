@@ -23,7 +23,9 @@ type ModeCCodeConfidence struct {
 
 	// GrayCode is the 12-bit Mode-C reply exactly as in bits 28-17
 	// (bit 12 = C1 ... bit 1 = D4). When it is zero, Encode derives it from
-	// FlightLevel.
+	// FlightLevel. When both are set (GrayCode non-zero, and FlightLevel
+	// non-zero or AltitudeValid true) GrayCode must be a valid Gillham code
+	// of FlightLevel, or Validate and Encode return an error.
 	GrayCode uint16
 	// FlightLevel is the altitude decoded from GrayCode in FL (100 ft).
 	// It is only meaningful when AltitudeValid is true.
@@ -240,6 +242,13 @@ func (m *ModeCCodeConfidence) String() string {
 func (m *ModeCCodeConfidence) Validate() error {
 	if m.GrayCode > 0x0FFF {
 		return fmt.Errorf("%w: I001/100 Mode-C code is 12 bits, got %#x", asterix.ErrInvalidMessage, m.GrayCode)
+	}
+	if m.GrayCode != 0 && (m.FlightLevel != 0 || m.AltitudeValid) {
+		alt, ok := GillhamToAltitude(m.GrayCode)
+		if !ok || float64(alt) != m.FlightLevel*100 {
+			return fmt.Errorf("%w: I001/100 GrayCode %04o disagrees with FlightLevel %v (AltitudeValid %v)",
+				asterix.ErrInvalidMessage, m.GrayCode, m.FlightLevel, m.AltitudeValid)
+		}
 	}
 	return nil
 }

@@ -13,7 +13,9 @@ import (
 // Fixed length: 8 bytes
 // 3D-Position of the radar/data source in WGS-84 coordinates
 type DataSourcePosition struct {
-	Height    float64 // Height above the WGS-84 ellipsoid in metres (LSB = 1 m, ed 1.29 §5.2.12)
+	// HeightM is the height above the WGS-84 ellipsoid in metres (LSB 1 m,
+	// ed 1.29 §5.2.12). Named with its unit since it changed from feet.
+	HeightM   float64
 	Latitude  float64 // Latitude in degrees (-90 to +90)
 	Longitude float64 // Longitude in degrees (-180 to +180)
 }
@@ -43,7 +45,7 @@ func (d *DataSourcePosition) Decode(buf *bytes.Buffer) (int, error) {
 
 	// Bytes 0-1: Height (16-bit signed)
 	rawHeight := int16(uint16(data[0])<<8 | uint16(data[1]))
-	d.Height = float64(rawHeight) * heightLSB
+	d.HeightM = float64(rawHeight) * heightLSB
 
 	// Bytes 2-4: Latitude (24-bit signed, two's complement)
 	rawLat := int32(data[2])<<16 | int32(data[3])<<8 | int32(data[4])
@@ -71,7 +73,7 @@ func (d *DataSourcePosition) Encode(buf *bytes.Buffer) (int, error) {
 	}
 
 	// Convert height to raw value (16-bit signed)
-	rawHeight := int16(math.Round(d.Height / heightLSB))
+	rawHeight := int16(math.Round(d.HeightM / heightLSB))
 
 	// Convert latitude to raw value (24-bit signed)
 	rawLat := int32(math.Round(d.Latitude / latLonLSB))
@@ -104,23 +106,21 @@ func (d *DataSourcePosition) Encode(buf *bytes.Buffer) (int, error) {
 
 // Validate validates the Data Source Position
 func (d *DataSourcePosition) Validate() error {
-	// Height: 16-bit signed, 1 m LSB
-	maxHeight := float64(32767) * heightLSB
-	minHeight := float64(-32768) * heightLSB
-	if d.Height < minHeight || d.Height > maxHeight {
-		return fmt.Errorf("%w: height must be %.0f to %.0f m, got %.0f",
-			asterix.ErrInvalidMessage, minHeight, maxHeight, d.Height)
+	// Height: 16-bit signed, 1 m LSB. NaN and ±Inf fail every check.
+	if h := math.Round(d.HeightM / heightLSB); !(h >= math.MinInt16 && h <= math.MaxInt16) {
+		return fmt.Errorf("%w: height must be -32768 to 32767 m, got %v",
+			asterix.ErrInvalidMessage, d.HeightM)
 	}
 
 	// Latitude must be -90 to +90 degrees
-	if math.IsNaN(d.Latitude) || d.Latitude < -90 || d.Latitude > 90 {
-		return fmt.Errorf("%w: latitude must be -90 to +90 degrees, got %.6f",
+	if !(d.Latitude >= -90 && d.Latitude <= 90) {
+		return fmt.Errorf("%w: latitude must be -90 to +90 degrees, got %v",
 			asterix.ErrInvalidMessage, d.Latitude)
 	}
 
 	// Longitude must be -180 to <180 degrees (24-bit two's complement)
-	if d.Longitude < -180 || math.Round(d.Longitude/latLonLSB) > 0x7FFFFF {
-		return fmt.Errorf("%w: longitude must be -180 to +180 degrees, got %.6f",
+	if !(d.Longitude >= -180 && math.Round(d.Longitude/latLonLSB) <= 0x7FFFFF) {
+		return fmt.Errorf("%w: longitude must be -180 to +180 degrees, got %v",
 			asterix.ErrInvalidMessage, d.Longitude)
 	}
 
@@ -129,5 +129,5 @@ func (d *DataSourcePosition) Validate() error {
 
 // String returns a string representation
 func (d *DataSourcePosition) String() string {
-	return fmt.Sprintf("lat: %.6f°, lon: %.6f°, height: %.0f m", d.Latitude, d.Longitude, d.Height)
+	return fmt.Sprintf("lat: %.6f°, lon: %.6f°, height: %.0f m", d.Latitude, d.Longitude, d.HeightM)
 }

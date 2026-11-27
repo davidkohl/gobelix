@@ -169,7 +169,7 @@ func TestCat034DataSourcePosition(t *testing.T) {
 	pos := v129.NewDataSourcePosition()
 	pos.Latitude = 50.033333 // ~50°02'N
 	pos.Longitude = 8.570556 // ~8°34'E
-	pos.Height = 364.0       // ~364 m height (LSB 1 m)
+	pos.HeightM = 364.0       // ~364 m height (LSB 1 m)
 	if err := record.SetDataItem("I034/120", pos); err != nil {
 		t.Fatalf("Failed to set I034/120: %v", err)
 	}
@@ -217,9 +217,9 @@ func TestCat034DataSourcePosition(t *testing.T) {
 		}
 
 		// Check height (allow 25 ft resolution error)
-		heightDiff := decodedPos.Height - 364.0
+		heightDiff := decodedPos.HeightM - 364.0
 		if heightDiff < -25 || heightDiff > 25 {
-			t.Errorf("Height mismatch: got %.0f m, want ~364 m", decodedPos.Height)
+			t.Errorf("Height mismatch: got %.0f m, want ~364 m", decodedPos.HeightM)
 		}
 
 		t.Logf("Decoded position: %s", decodedPos.String())
