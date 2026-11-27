@@ -20,6 +20,10 @@ func NewUAP10() (*UAP10, error) {
 	if err != nil {
 		return nil, err
 	}
+	// FRN 14 is the RS bit of the RFS organised field (ed 1.2 §5.3.2.13 note 3, §6).
+	if err := base.EnableRFS(14); err != nil {
+		return nil, err
+	}
 
 	return &UAP10{
 		BaseUAP: base,
@@ -166,5 +170,5 @@ var cat002Fields = []asterix.DataField{
 		Type:        asterix.Explicit,
 		Mandatory:   false,
 	},
-	// FRN 14: RFS indicator (RFS is not supported)
+	// FRN 14: RFS indicator (RS bit), enabled in NewUAP10
 }

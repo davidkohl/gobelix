@@ -20,6 +20,10 @@ func NewUAP12Plot() (*UAP12Plot, error) {
 	if err != nil {
 		return nil, err
 	}
+	// FRN 21 is the RS bit of the RFS organised field (ed 1.4 §5.3.2.16 note 3, §6).
+	if err := base.EnableRFS(21); err != nil {
+		return nil, err
+	}
 
 	return &UAP12Plot{
 		BaseUAP: base,
@@ -208,5 +212,5 @@ var cat001PlotFields = []asterix.DataField{
 		Type:        asterix.Explicit,
 		Mandatory:   false,
 	},
-	// FRN 21: Reserved for RFS Indicator (RFS is not supported)
+	// FRN 21: RFS indicator (RS bit), enabled in NewUAP12Plot
 }

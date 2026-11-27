@@ -37,7 +37,10 @@ The implementation follows the ASTERIX Category 002 specification edition 1.2 (U
 | 11  | I002/080   | Warning/Error Conditions         | Extended | 1+     | No        |
 | 13  | SP002      | Special Purpose Field            | Explicit | 1+     | No        |
 
-FRN 14 (RFS) is not supported.
+FRN 14 is the RS bit: the RFS organised field (N, then N times FRN + item)
+is decoded and its items join the record as if sent in FSPEC order. The
+record FSPEC is rebuilt to that standard form, so Encode writes no RFS field.
+A set FSPEC bit for a spare FRN is a decode error.
 
 ## Message Types
 

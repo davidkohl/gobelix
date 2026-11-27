@@ -35,6 +35,37 @@ type BaseUAP struct {
 	mandatoryIDs     []string             // Pre-computed list of mandatory item IDs
 	fieldsByDataItem map[string]DataField // O(1) lookup by data item ID
 	fieldsByFRN      map[uint8]DataField  // O(1) lookup by FRN
+	layout           decodeLayout         // FSPEC bit -> field, for Record.Decode
+}
+
+// maxFSPECOctets is the longest FSPEC that FSPEC.Decode accepts, and
+// maxFSPECFRN the highest FRN it can signal.
+const (
+	maxFSPECOctets = 8
+	maxFSPECFRN    = maxFSPECOctets * 7
+)
+
+// decodeLayout maps each FRN that an FSPEC can signal to the field that
+// Record.Decode reads for it. field[frn] is -1 for an FRN without a data
+// item (spare, reserved, beyond the UAP); rfsFRN is the RS bit, 0 if none.
+type decodeLayout struct {
+	field  [maxFSPECFRN + 1]int16
+	rfsFRN uint8
+}
+
+// RandomFieldSequencer is implemented by a UAP whose FSPEC reserves an RS
+// bit for a Random Field Sequencing (RFS) organised field (EUROCONTROL
+// ASTERIX Part 1; CAT001 ed 1.4 §6, CAT002 ed 1.2 §6). RFSFRN returns the
+// FRN of that bit, or 0 when the UAP has none. BaseUAP implements it; see
+// BaseUAP.EnableRFS.
+type RandomFieldSequencer interface {
+	RFSFRN() uint8
+}
+
+// layoutUAP gives Record.Decode the precomputed decodeLayout of a BaseUAP
+// (or a UAP embedding one).
+type layoutUAP interface {
+	decodeLayout() *decodeLayout
 }
 
 // NewBaseUAP creates a new BaseUAP with the given parameters
@@ -69,14 +100,48 @@ func NewBaseUAP(cat Category, version string, fields []DataField) (*BaseUAP, err
 		}
 	}
 
-	return &BaseUAP{
+	u := &BaseUAP{
 		category:         cat,
 		version:          version,
 		fields:           fields,
 		mandatoryIDs:     mandatoryIDs,
 		fieldsByDataItem: fieldsByDataItem,
 		fieldsByFRN:      fieldsByFRN,
-	}, nil
+	}
+	for i := range u.layout.field {
+		u.layout.field[i] = -1
+	}
+	for i, field := range fields {
+		if field.DataItem != "" && field.FRN <= maxFSPECFRN {
+			u.layout.field[field.FRN] = int16(i)
+		}
+	}
+	return u, nil
+}
+
+func (u *BaseUAP) decodeLayout() *decodeLayout {
+	return &u.layout
+}
+
+// EnableRFS declares frn as the RFS indicator (RS bit) of this UAP, so that
+// Record.Decode reads the RFS organised field at that FSPEC position:
+// one octet N, then N times a one-octet FRN followed by the data item of
+// that FRN. frn must not be used by a field. Call it only while building
+// the UAP, before it is shared.
+func (u *BaseUAP) EnableRFS(frn uint8) error {
+	if frn == 0 || frn > maxFSPECFRN {
+		return fmt.Errorf("%w: RFS FRN %d out of range", ErrInvalidField, frn)
+	}
+	if f, exists := u.fieldsByFRN[frn]; exists && f.DataItem != "" {
+		return fmt.Errorf("%w: RFS FRN %d is used by %s", ErrInvalidField, frn, f.DataItem)
+	}
+	u.layout.rfsFRN = frn
+	return nil
+}
+
+// RFSFRN implements RandomFieldSequencer: the FRN of the RS bit, or 0.
+func (u *BaseUAP) RFSFRN() uint8 {
+	return u.layout.rfsFRN
 }
 
 // Category returns the ASTERIX category number

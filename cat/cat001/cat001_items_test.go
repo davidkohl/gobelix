@@ -2,6 +2,7 @@ package cat001_test
 
 import (
 	"bytes"
+	"errors"
 	"math/bits"
 	"reflect"
 	"strings"
@@ -355,4 +356,71 @@ func FuzzCat001Decode(f *testing.F) {
 		// Whatever decodes must not panic on re-encode.
 		_, _ = db.Encode()
 	})
+}
+
+// FRN 21 is the RS bit (ed 1.4 §6): the RFS field (N, then FRN + item) is
+// read at its FSPEC position and its items join the record. The record
+// re-encodes in the standard form, which decodes to the same items.
+func TestCat001RFSField(t *testing.T) {
+	for name, tc := range map[string]struct {
+		rec      []byte
+		standard []byte
+		check    func(*asterix.Record) bool
+	}{
+		"plot": {
+			// FRN 1, 2, 21 | 010 | 020 plot | RFS N=2: FRN 9 (120), FRN 7 (141)
+			rec: []byte{0xC1, 0x01, 0x02, 0x32, 0x02, 0x20, 0x02, 0x09, 0x10, 0x07, 0x12, 0x34},
+			// FRN 1, 2, 7, 9 in FSPEC order
+			standard: []byte{0xC3, 0x40, 0x32, 0x02, 0x20, 0x12, 0x34, 0x10},
+			check: func(r *asterix.Record) bool {
+				_, a := r.GetDataItem("I001/120")
+				_, b := r.GetDataItem("I001/141")
+				return a && b
+			},
+		},
+		"track": {
+			// FRN 1, 2, 21 | 010 | 020 track | RFS N=1: FRN 3 (161)
+			rec:      []byte{0xC1, 0x01, 0x02, 0x32, 0x02, 0x80, 0x01, 0x03, 0x12, 0x34},
+			standard: []byte{0xE0, 0x32, 0x02, 0x80, 0x12, 0x34},
+			check: func(r *asterix.Record) bool {
+				it, ok := r.GetDataItem("I001/161")
+				return ok && it.(*v12.TrackPlotNumber).Number == 0x1234
+			},
+		},
+	} {
+		db := decodeCat001(t, block(1, tc.rec))
+		rec := db.Records()[0]
+		if !tc.check(rec) {
+			t.Errorf("%s: RFS items missing: %v", name, rec.Items())
+		}
+		out, err := db.Encode()
+		if err != nil {
+			t.Fatalf("%s: encode: %v", name, err)
+		}
+		if want := block(1, tc.standard); !bytes.Equal(out, want) {
+			t.Errorf("%s: re-encode\n got % X\nwant % X", name, out, want)
+		}
+		std := decodeCat001(t, block(1, tc.standard)).Records()[0]
+		if !reflect.DeepEqual(std.Items(), rec.Items()) {
+			t.Errorf("%s: standard form decodes to %v, RFS form to %v", name, std.Items(), rec.Items())
+		}
+	}
+}
+
+// Spare FSPEC bits (plot FRN 16-19, ed 1.4 §5.3.2.16 note 1) and FRNs
+// beyond the track UAP (above 22, §5.4.1.2) are decode errors, not a
+// silent skip that would shift the following items.
+func TestCat001SpareFSPECBitFails(t *testing.T) {
+	u, _ := uap.NewUAP12()
+	d := asterix.NewDecoder(asterix.WithPreloadedUAPs(u))
+	for name, rec := range map[string][]byte{
+		"plot FRN 16":  {0xC1, 0x01, 0x40, 0x32, 0x02, 0x20},
+		"plot FRN 22":  {0xC1, 0x01, 0x01, 0x80, 0x32, 0x02, 0x20, 0x00},
+		"track FRN 23": {0xC1, 0x01, 0x01, 0x40, 0x32, 0x02, 0x80, 0x00},
+	} {
+		_, err := d.Decode(block(1, rec))
+		if !errors.Is(err, asterix.ErrInvalidFSPEC) {
+			t.Errorf("%s: err = %v, want ErrInvalidFSPEC", name, err)
+		}
+	}
 }

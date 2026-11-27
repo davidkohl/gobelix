@@ -2,6 +2,7 @@ package cat002_test
 
 import (
 	"bytes"
+	"errors"
 	"reflect"
 	"testing"
 
@@ -191,4 +192,31 @@ func FuzzCat002Decode(f *testing.F) {
 		}
 		_, _ = db.Encode()
 	})
+}
+
+// FRN 14 is the RS bit (ed 1.2 §6): the RFS field is read and its items
+// join the record; FRN 12 is spare (§5.3.2.13 note 1) and fails.
+func TestCat002RFSFieldAndSpareBit(t *testing.T) {
+	d := newCat002Decoder(t)
+	// FRN 1, 2, 14 | 010 | 000 = 2 (sector crossing) | RFS N=1: FRN 3 (020)
+	rfs := []byte{0xC1, 0x02, 0x19, 0x05, 0x02, 0x01, 0x03, 0x40}
+	db, err := d.Decode(block(2, rfs))
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if it, ok := db.Records()[0].GetDataItem("I002/020"); !ok || it.(*v10.SectorNumber).SectorNumber != 90 {
+		t.Errorf("I002/020 = %+v", it)
+	}
+	out, err := db.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := block(2, []byte{0xE0, 0x19, 0x05, 0x02, 0x40}); !bytes.Equal(out, want) {
+		t.Errorf("re-encode\n got % X\nwant % X", out, want)
+	}
+
+	_, err = d.Decode(block(2, []byte{0xC1, 0x08, 0x19, 0x05, 0x02}))
+	if !errors.Is(err, asterix.ErrInvalidFSPEC) {
+		t.Errorf("spare FRN 12: err = %v, want ErrInvalidFSPEC", err)
+	}
 }

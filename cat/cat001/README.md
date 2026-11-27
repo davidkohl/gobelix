@@ -52,7 +52,10 @@ one layout.
 | 15  | I001/150   | Presence of X-Pulse              | Fixed    | 1      |
 | 20  | SP001      | Special Purpose Field            | Explicit | 1+     |
 
-FRN 21 (RFS) is not supported.
+FRN 21 is the RS bit: the RFS organised field (N, then N times FRN + item)
+is decoded and its items join the record as if sent in FSPEC order. The
+record FSPEC is rebuilt to that standard form, so Encode writes no RFS field.
+A set FSPEC bit for a spare FRN is a decode error.
 
 ## Track UAP
 

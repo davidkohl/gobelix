@@ -20,6 +20,10 @@ func NewUAP12Track() (*UAP12Track, error) {
 	if err != nil {
 		return nil, err
 	}
+	// FRN 21 is the RS bit of the RFS organised field (ed 1.4 §5.4.2.20 note 2, §6).
+	if err := base.EnableRFS(21); err != nil {
+		return nil, err
+	}
 
 	return &UAP12Track{
 		BaseUAP: base,
@@ -247,7 +251,7 @@ var cat001TrackFields = []asterix.DataField{
 		Type:        asterix.Explicit,
 		Mandatory:   false,
 	},
-	// FRN 21: Reserved for RFS Indicator (RFS is not supported)
+	// FRN 21: RFS indicator (RS bit), enabled in NewUAP12Track
 	// FX - Field Extension Indicator
 	{
 		FRN:         22,

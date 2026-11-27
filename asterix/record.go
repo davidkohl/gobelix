@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"math/bits"
 )
 
 // Record represents a single ASTERIX record.
@@ -195,56 +196,24 @@ func (r *Record) Decode(buf *bytes.Buffer) (int, error) {
 		delete(r.items, k)
 	}
 
-	// Read items based on FSPEC
-	for _, field := range uap.Fields() {
-		if !r.fspec.GetFRN(field.FRN) {
-			continue
+	// Every FSPEC bit must name something this UAP can read. A bit for an
+	// FRN without a data item (spare, beyond the UAP, or an RS bit the UAP
+	// does not support) stands for data of unknown length: skipping it
+	// would shift every later item, so the record is rejected.
+	var rfsSent bool
+	if l, ok := uap.(layoutUAP); ok {
+		n, rfsSent, err = r.decodeItemsByLayout(buf, uap, l.decodeLayout())
+	} else {
+		n, rfsSent, err = r.decodeItemsByFields(buf, uap)
+	}
+	bytesRead += n
+	if err != nil {
+		return bytesRead, err
+	}
+	if rfsSent {
+		if err := r.standardFSPEC(uap); err != nil {
+			return bytesRead, err
 		}
-
-		// Create data item
-		item, err := uap.CreateDataItem(field.DataItem)
-		if err != nil {
-			// For fixed length items, skip over the bytes if we can't create the item
-			// This is intentional for forward compatibility - unknown fields are silently skipped
-			// to allow newer protocol versions to be partially parsed by older decoders.
-			//
-			// NOTE: In production, you may want to log this at DEBUG level:
-			//   logger.Debug("Skipping unknown field", "field", field.DataItem, "bytes", field.Length)
-			if field.Type == Fixed {
-				if buf.Len() < int(field.Length) {
-					return bytesRead, NewDecodeError(
-						r.category,
-						field.DataItem,
-						fmt.Sprintf("buffer too short to skip field: need %d bytes, have %d", field.Length, buf.Len()),
-						ErrBufferTooShort,
-					)
-				}
-				buf.Next(int(field.Length))
-				bytesRead += int(field.Length)
-				continue
-			}
-			return bytesRead, NewDecodeError(
-				r.category,
-				field.DataItem,
-				"creating data item",
-				err,
-			)
-		}
-
-		// Decode the item
-		n, err := item.Decode(buf)
-		if err != nil {
-			return bytesRead, NewDecodeError(
-				r.category,
-				field.DataItem,
-				"decoding data item",
-				err,
-			).WithPosition(bytesRead, buf.Len()+bytesRead)
-		}
-		bytesRead += n
-
-		// Store the item
-		r.items[field.DataItem] = item
 	}
 
 	// Validate the record
@@ -253,6 +222,206 @@ func (r *Record) Decode(buf *bytes.Buffer) (int, error) {
 	}
 
 	return bytesRead, nil
+}
+
+// decodeItemsByLayout reads the items of the set FSPEC bits in FRN order,
+// using the precomputed layout of a BaseUAP. It reports whether an RFS
+// field was read.
+func (r *Record) decodeItemsByLayout(buf *bytes.Buffer, uap UAP, l *decodeLayout) (int, bool, error) {
+	fields := uap.Fields()
+	read := 0
+	rfsSent := false
+	for i, b := range r.fspec.data() {
+		b &= 0xFE // FX
+		for b != 0 {
+			bit := bits.LeadingZeros8(b)
+			b &^= 0x80 >> bit
+			frn := uint8(i*7 + bit + 1)
+			if frn == l.rfsFRN {
+				n, err := r.decodeRFS(buf, uap, frn, read)
+				read += n
+				if err != nil {
+					return read, rfsSent, err
+				}
+				rfsSent = true
+				continue
+			}
+			idx := l.field[frn]
+			if idx < 0 {
+				return read, rfsSent, NewDecodeError(r.category, "", "checking FSPEC against the UAP", unknownFRNError(frn))
+			}
+			n, err := r.decodeField(buf, uap, &fields[idx], read)
+			read += n
+			if err != nil {
+				return read, rfsSent, err
+			}
+		}
+	}
+	return read, rfsSent, nil
+}
+
+// decodeItemsByFields reads the items of any UAP in the order of its
+// Fields, after checking that every set FSPEC bit has a data item.
+func (r *Record) decodeItemsByFields(buf *bytes.Buffer, uap UAP) (int, bool, error) {
+	rfsFRN := uapRFSFRN(uap)
+	if err := checkFSPEC(uap, r.fspec, rfsFRN); err != nil {
+		return 0, false, NewDecodeError(r.category, "", "checking FSPEC against the UAP", err)
+	}
+	rfsPending := rfsFRN != 0 && r.fspec.GetFRN(rfsFRN)
+	rfsSent := rfsPending
+	read := 0
+	fields := uap.Fields()
+	for i := range fields {
+		field := &fields[i]
+		if rfsPending && field.FRN > rfsFRN {
+			n, err := r.decodeRFS(buf, uap, rfsFRN, read)
+			read += n
+			if err != nil {
+				return read, rfsSent, err
+			}
+			rfsPending = false
+		}
+		if field.FRN == rfsFRN || !r.fspec.GetFRN(field.FRN) {
+			continue
+		}
+		n, err := r.decodeField(buf, uap, field, read)
+		read += n
+		if err != nil {
+			return read, rfsSent, err
+		}
+	}
+	if rfsPending {
+		n, err := r.decodeRFS(buf, uap, rfsFRN, read)
+		read += n
+		if err != nil {
+			return read, rfsSent, err
+		}
+	}
+	return read, rfsSent, nil
+}
+
+// decodeField reads the data item of field into r.items. pos is the
+// record offset of the item, for error reporting.
+func (r *Record) decodeField(buf *bytes.Buffer, uap UAP, field *DataField, pos int) (int, error) {
+	item, err := uap.CreateDataItem(field.DataItem)
+	if err != nil {
+		// A fixed-length item the UAP lists but cannot build is skipped by
+		// its length from the UAP, so later items stay aligned.
+		if field.Type == Fixed {
+			if buf.Len() < int(field.Length) {
+				return 0, NewDecodeError(
+					r.category,
+					field.DataItem,
+					fmt.Sprintf("buffer too short to skip field: need %d bytes, have %d", field.Length, buf.Len()),
+					ErrBufferTooShort,
+				)
+			}
+			buf.Next(int(field.Length))
+			return int(field.Length), nil
+		}
+		return 0, NewDecodeError(r.category, field.DataItem, "creating data item", err)
+	}
+
+	n, err := item.Decode(buf)
+	if err != nil {
+		return 0, NewDecodeError(
+			r.category,
+			field.DataItem,
+			"decoding data item",
+			err,
+		).WithPosition(pos, buf.Len()+pos)
+	}
+	r.items[field.DataItem] = item
+	return n, nil
+}
+
+// decodeRFS reads a Random Field Sequencing organised field: one octet N,
+// then N times a one-octet FRN followed by the data item of that FRN
+// (CAT001 ed 1.4 §6, CAT002 ed 1.2 §6). The items join r.items as if they
+// had been sent in FSPEC order; Decode then rebuilds the FSPEC to that
+// standard form (RS bit cleared), so encoding the record writes no RFS field.
+func (r *Record) decodeRFS(buf *bytes.Buffer, uap UAP, rfsFRN uint8, pos int) (int, error) {
+	read := 0
+	count, err := buf.ReadByte()
+	if err != nil {
+		return read, NewDecodeError(r.category, "RFS", "reading RFS field count", ErrBufferTooShort)
+	}
+	read++
+	for i := 0; i < int(count); i++ {
+		frn, err := buf.ReadByte()
+		if err != nil {
+			return read, NewDecodeError(r.category, "RFS",
+				fmt.Sprintf("reading FRN of RFS field %d of %d", i+1, count), ErrBufferTooShort)
+		}
+		read++
+		field, ok := uap.GetFieldByFRN(frn)
+		if !ok || field.DataItem == "" || frn == rfsFRN {
+			return read, NewDecodeError(r.category, "RFS",
+				fmt.Sprintf("RFS field %d names FRN %d, which has no data item in the UAP", i+1, frn),
+				ErrInvalidFSPEC)
+		}
+		if _, dup := r.items[field.DataItem]; dup || r.fspec.GetFRN(frn) {
+			return read, NewDecodeError(r.category, field.DataItem,
+				fmt.Sprintf("FRN %d sent twice (FSPEC or RFS field)", frn), ErrInvalidFSPEC)
+		}
+		n, err := r.decodeField(buf, uap, &field, pos+read)
+		read += n
+		if err != nil {
+			return read, err
+		}
+	}
+
+	return read, nil
+}
+
+// standardFSPEC rebuilds r.fspec from the items, against uap: the
+// standard form of a record whose items arrived (partly) in an RFS field.
+func (r *Record) standardFSPEC(uap UAP) error {
+	fspec := NewFSPEC()
+	for id := range r.items {
+		f, ok := uap.GetFieldByDataItem(id)
+		if !ok {
+			return NewDecodeError(r.category, id, "rebuilding FSPEC after RFS", ErrUnknownDataItem)
+		}
+		if err := fspec.SetFRN(f.FRN); err != nil {
+			return NewDecodeError(r.category, id, "rebuilding FSPEC after RFS", err)
+		}
+	}
+	r.fspec = fspec
+	return nil
+}
+
+// uapRFSFRN returns the FRN of the RS bit of uap, or 0.
+func uapRFSFRN(uap UAP) uint8 {
+	if rfs, ok := uap.(RandomFieldSequencer); ok {
+		return rfs.RFSFRN()
+	}
+	return 0
+}
+
+// checkFSPEC returns an ErrInvalidFSPEC error naming the first FRN that is
+// set in f but has no data item in uap and is not its RS bit rfsFRN.
+func checkFSPEC(uap UAP, f *FSPEC, rfsFRN uint8) error {
+	for i, b := range f.data() {
+		for bit := 0; bit < 7; bit++ {
+			if b&(0x80>>bit) == 0 {
+				continue
+			}
+			frn := uint8(i*7 + bit + 1)
+			if frn == rfsFRN {
+				continue
+			}
+			if field, ok := uap.GetFieldByFRN(frn); !ok || field.DataItem == "" {
+				return unknownFRNError(frn)
+			}
+		}
+	}
+	return nil
+}
+
+func unknownFRNError(frn uint8) error {
+	return fmt.Errorf("%w: FRN %d is set but has no data item in the UAP (spare, reserved or not supported)",
+		ErrInvalidFSPEC, frn)
 }
 
 // Category returns the category of this record
