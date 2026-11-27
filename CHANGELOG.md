@@ -148,7 +148,16 @@ that old code fails to compile instead of reading other values.
 - A set FSPEC bit for a spare FRN (for example FRN 2) or an FRN beyond the
   UAP is a decode error (FSPEC check above).
 
-### CAT048, CAT021
+### CAT021 (ed 2.6)
+
+- SP021: LEN counts itself (the decoder read one octet too many, so the
+  next record of the data block was misaligned). LEN = 0 and a LEN beyond
+  the data are decode errors; an empty `Data` encodes as LEN = 1; `Validate`
+  and `Encode` refuse a `Data` whose first octet is not its length.
+- A set FSPEC bit for a spare FRN or an FRN beyond the UAP is a decode
+  error (FSPEC check above).
+
+### CAT048
 
 - Decoded values are unchanged. The only new behaviour is the FSPEC check
   above: a record that sets a spare FSPEC bit or an FRN beyond the UAP is
