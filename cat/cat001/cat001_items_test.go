@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"math/bits"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/davidkohl/gobelix/asterix"
@@ -251,6 +252,10 @@ func TestCat001RecordSelectsUAPByTYP(t *testing.T) {
 	ts, ok := recs[1].GetDataItem("I001/170")
 	if !ok || !ts.(*v12.TrackStatus).TRE {
 		t.Errorf("track record: I001/170 = %+v", ts)
+	}
+
+	if !strings.Contains(db.String(), "I001/161") {
+		t.Error("DataBlock.String does not list the track-only I001/161")
 	}
 
 	sp, ok := recs[2].GetDataItem("SP001")

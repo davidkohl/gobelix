@@ -371,11 +371,19 @@ func (db *DataBlock) String() string {
 	for i, record := range db.records {
 		sb.WriteString(fmt.Sprintf("Record #%d:\n", i+1))
 
+		// The layout of this record (a RecordUAPSelector picks it per record)
+		uap := db.uap
+		if uap != nil {
+			if u, err := record.encodeUAP(); err == nil {
+				uap = u
+			}
+		}
+
 		// Add FSPEC information with list of present FRNs
-		if fspec := record.FSPEC(); fspec != nil && db.uap != nil {
+		if fspec := record.FSPEC(); fspec != nil && uap != nil {
 			// Collect present FRNs
 			var presentFRNs []string
-			for _, field := range db.uap.Fields() {
+			for _, field := range uap.Fields() {
 				if fspec.GetFRN(field.FRN) {
 					presentFRNs = append(presentFRNs, fmt.Sprintf("%d", field.FRN))
 				}
@@ -384,8 +392,8 @@ func (db *DataBlock) String() string {
 		}
 
 		// Get items in FRN order if UAP available
-		if db.uap != nil {
-			fields := db.uap.Fields()
+		if uap != nil {
+			fields := uap.Fields()
 
 			// Print data items in FRN order
 			for _, field := range fields {
